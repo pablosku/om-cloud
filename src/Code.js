@@ -1,4 +1,5 @@
 // ===== Office Manager Cloud: stage 1, reminders =====
+// Stage 2 (print queue) lives in Print.gs: doGet, printAdd, printButton, printTick, queueText.
 // Flow: Telegram -> Cloudflare Worker -> doPost (must answer "ok") -> inbox sheet -> Gemini -> Calendar.
 // A 1-minute trigger (tick) sends alerts, retries Gemini when it was busy, nags, and sends the morning summary.
 // Script Properties: TG_TOKEN, ALLOWED_USER_ID, CALENDAR_ID, GEMINI_KEY, URL_SECRET, TG_SECRET, WORKER_URL
@@ -82,8 +83,9 @@ function doPost(e) {
 
 function onMessage(m) {
   if (String(m.from.id) !== prop('ALLOWED_USER_ID')) return;
+  if (m.document) return printAdd(m); // Print.gs
   const text = (m.text || '').trim();
-  if (!text) return send('כרגע אני מבין רק טקסט.');
+  if (!text) return send('כרגע אני מבין רק טקסט ו-PDF להדפסה.');
   if (text.startsWith('/')) return command(text);
   tg('sendChatAction', { chat_id: m.chat.id, action: 'typing' }); // instant sign that the message arrived
   const row = inboxAdd(new Date(m.date * 1000), m.message_id, text, m.reply_to_message ? m.reply_to_message.message_id : '');
@@ -205,6 +207,7 @@ function onButton(q) {
     if (line) tg('editMessageText', { chat_id: msg.chat.id, message_id: msg.message_id, text: msg.text + '\n' + line });
     else tg('editMessageReplyMarkup', { chat_id: msg.chat.id, message_id: msg.message_id, reply_markup: { inline_keyboard: [] } });
   };
+  if (act === 'pc' || act === 'pr') return printButton(q, act, k); // Print.gs
   const o = unkey_(k);
   if (!o) return finish('לא מצאתי, אולי כבר טופלה');
   if (act === 'x') {
@@ -222,6 +225,7 @@ function onButton(q) {
     return finish('נדחה', '💤 נדחה ל' + fmt(ns));
   }
   if (act === 'd') {
+    if (ev.getTag('state') === 'done') return finish('כבר סומן', '✅ בוצע'); // pressed on an older nag message
     ev.setTag('state', 'done');
     if (!o.s) ev.setTitle('✅ ' + ev.getTitle()); // a series occurrence keeps its title, the tag is enough
     return finish('יפה!', '✅ בוצע');
@@ -233,6 +237,7 @@ function command(text) {
   const [cmd, ...rest] = text.split(/\s+/);
   const c = cmd.toLowerCase().replace(/@.*/, '');
   if (c === '/list') return send(listText(7));
+  if (c === '/queue') return send(queueText());
   if (c === '/tz') {
     const z = rest.join('');
     if (!z) return send('אזור זמן נוכחי: ' + userTz() + '\nבחו״ל: /tz Europe/London\nחזרה הביתה: /tz home');
@@ -242,7 +247,7 @@ function command(text) {
     P.setProperty('USER_TZ', z);
     return send('הבנתי, אתה ב-' + z + '. תזכורות חדשות יפורשו לפי השעון שם. תזכורות קיימות לא זזות.');
   }
-  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\n/list תזכורות קרובות\n/tz אזור זמן בחו״ל\nתשובה (reply) להתראה עם שעה חדשה = דחייה לשעה הזו');
+  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\n/tz אזור זמן בחו״ל\nתשובה (reply) להתראה עם שעה חדשה = דחייה לשעה הזו');
 }
 
 function listText(days) {
@@ -261,6 +266,8 @@ function tick() {
     alerts();
     retryInbox();
     morning();
+  } catch (e) { log('tick error', String(e && e.stack || e)); }
+  try { printTick(); // Print.gs
   } catch (e) { log('tick error', String(e && e.stack || e)); }
   finally { lock.releaseLock(); }
 }
@@ -329,6 +336,7 @@ function setup() {
   log('setup webhook', tg('setWebhook', { url: prop('WORKER_URL'), secret_token: prop('TG_SECRET'), allowed_updates: ['message', 'callback_query'] }));
   tg('setMyCommands', { commands: [
     { command: 'list', description: 'תזכורות קרובות' },
+    { command: 'queue', description: 'מה מחכה להדפסה' },
     { command: 'tz', description: 'אזור זמן בחו״ל' },
     { command: 'help', description: 'עזרה' }] });
   P.setProperty('MORNING', Utilities.formatDate(new Date(), userTz(), 'yyyy-MM-dd')); // first summary tomorrow
