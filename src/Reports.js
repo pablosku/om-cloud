@@ -299,6 +299,16 @@ function fillDocXml_(xml, project, m, y, rows) {
     let ci = 0;
     out[ri] = trs[ri].replace(/<w:tc>[\s\S]*?<\/w:tc>/g, tc => cellXml_(tc, r && keys[ci] ? r[keys[ci++]] : (ci++, '')));
   });
+  // totals at the bottom of the form: the number goes after the "-" of each label, in the label's last run
+  const n = rows.length, hrs = rows.reduce((s, r) => s + Number(r.hours), 0), pay = rows.reduce((s, r) => s + Number(r.price), 0);
+  const TOT = [[/ימים\/מפגשים-\s*$/, ' ' + n], [/שעות-\s*$/, ' ' + hrs], [/לתשלום-\s*₪\s*$/, ' ' + pay + ' ₪']];
+  for (let i = data.length ? data[data.length - 1] + 1 : 3; i < trs.length; i++)
+    out[i] = trs[i].replace(/<w:tc>[\s\S]*?<\/w:tc>/g, tc => {
+      const ts = [...tc.matchAll(T)], txt = ts.map(x => x[1]).join('').replace(/&quot;/g, '"'), hit = TOT.find(([re]) => re.test(txt));
+      if (!hit || !ts.length) return tc;
+      const lastT = ts[ts.length - 1], base = lastT[1].replace(/\s*₪?\s*$/, '');
+      return tc.slice(0, lastT.index) + '<w:t xml:space="preserve">' + base + hit[1] + '</w:t>' + tc.slice(lastT.index + lastT[0].length);
+    });
   let pos = 0;
   const newTbl = tbl[0].replace(/<w:tr[ >][\s\S]*?<\/w:tr>/g, () => out[pos++]);
   return xml.replace(tbl[0], () => newTbl);
@@ -329,9 +339,16 @@ function holidays_(m, y) {
   return out;
 }
 
+// multipart built by hand: UrlFetchApp drops the Hebrew part of the file name, so Telegram showed only "11.26.docx"
 function sendDoc_(blob, caption) {
+  const b = '----om' + Utilities.getUuid().replace(/-/g, ''), u = s => Utilities.newBlob('').setDataFromString(s, 'UTF-8').getBytes();
+  const field = (k, v) => u('--' + b + '\r\nContent-Disposition: form-data; name="' + k + '"\r\n\r\n' + v + '\r\n');
+  const name = String(blob.getName() || 'file.docx').replace(/["\r\n]/g, '');
+  const body = [].concat(field('chat_id', prop('ALLOWED_USER_ID')), field('caption', caption || ''),
+    u('--' + b + '\r\nContent-Disposition: form-data; name="document"; filename="' + name + '"\r\nContent-Type: ' +
+      (blob.getContentType() || 'application/octet-stream') + '\r\n\r\n'), blob.getBytes(), u('\r\n--' + b + '--\r\n'));
   const r = UrlFetchApp.fetch('https://api.telegram.org/bot' + prop('TG_TOKEN') + '/sendDocument',
-    { method: 'post', payload: { chat_id: prop('ALLOWED_USER_ID'), caption: caption || '', document: blob }, muteHttpExceptions: true });
+    { method: 'post', contentType: 'multipart/form-data; boundary=' + b, payload: body, muteHttpExceptions: true });
   const j = JSON.parse(r.getContentText());
   if (!j.ok) { log('tg error sendDocument', j.description); throw new Error(j.description); }
 }
@@ -362,7 +379,7 @@ function retornoRun(m, y) {
     const w = Object.keys(warn);
     if (w.length) lines.push('', '⚠️ מפגשים בימי חג, אולי לא התקיימו:', ...w.map(d => d.slice(0, 5) + ' ' + warn[d]));
     send(lines.join('\n'));
-    files.forEach(f => { try { sendDoc_(f); } catch (e) { send('לא הצלחתי לשלוח את ' + f.getName() + ': ' + e.message); } });
+    files.forEach(f => { try { sendDoc_(f, f.getName().replace('.docx', '')); } catch (e) { send('לא הצלחתי לשלוח את ' + f.getName() + ': ' + e.message); } });
   } catch (e) {
     log('retorno error', String(e && e.stack || e));
     send('יצירת דוחות רטורנו נכשלה: ' + e.message);
