@@ -3,7 +3,8 @@ Runs next to bot.py and reuses its printing code (SumatraPDF, caption rules, pdf
 Needs two lines in .env:  PRINT_QUEUE_URL=<web app /exec url>   PRINT_QUEUE_SECRET=<URL_SECRET>
 Pulls and answers are GET requests: Apps Script answers with a 302, and a redirected POST turns into a GET.
 The one POST is the answer to a fetch job (web requests the cloud cannot make, e.g. Mei Avivim refuses Google's
-servers): the body is too big for a URL. doPost runs on the POST itself; the redirect only fetches its "ok"."""
+servers): the body is too big for a URL. doPost runs on the POST itself; the redirect only fetches its "ok".
+v3: also adds items to the Google Keep shopping list (keep jobs, see keep_ops.py)."""
 import base64, json, re, socket, sys, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime
 
@@ -15,7 +16,7 @@ URL = bot.ENV.get("PRINT_QUEUE_URL", "").strip()
 SECRET = bot.ENV.get("PRINT_QUEUE_SECRET", "").strip()
 POLL = 30  # seconds between pulls when the queue is empty
 STATE = bot.BASE / "print_agent_state.json"  # ids already printed + answers not yet delivered
-VERSION = "2"
+VERSION = "3"
 
 
 def load_state():
@@ -49,7 +50,7 @@ def send_done(st, answer):
 def flush(st):
     for a in list(st["pending"]):
         try:
-            res = get({"action": "done", **a}, timeout=60).strip()
+            res = get({"action": "done", **a}, timeout=60).strip()  # a keep answer carries its own action
         except Exception as e:
             log("AGENT done not delivered yet:", a["id"], e)
             return
@@ -82,6 +83,24 @@ def run_fetch(f):
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=180) as r:  # if this fails, the cloud hands the job out again later
         log("AGENT FETCH answer:", r.read().decode("utf-8")[:50])
+
+
+def run_keep(st, k):
+    """k = {"id", "list", "items"} -> adds them to Keep, answers ?action=keepdone. A job done before is only answered again."""
+    st.setdefault("kept", [])
+    if k["id"] in st["kept"]:
+        log("AGENT KEEP already done", k["id"], "- answering again")
+        return send_done(st, {"id": k["id"], "status": "ok", "msg": "{}", "action": "keepdone"})
+    try:
+        import keep_ops  # here, so a missing gkeepapi never stops printing
+        res = keep_ops.add_items(k["list"], k["items"])
+    except Exception as e:
+        log("AGENT KEEP failed", k["id"], e)
+        return send_done(st, {"id": k["id"], "status": "fail", "msg": str(e)[:300], "action": "keepdone"})
+    log(f"AGENT KEEP id={k['id']} list={k['list']} {res}")
+    st["kept"] = (st["kept"] + [k["id"]])[-500:]
+    save_state(st)  # before answering, so a lost answer never adds twice
+    send_done(st, {"id": k["id"], "status": "ok", "msg": json.dumps(res, ensure_ascii=False), "action": "keepdone"})
 
 
 def print_job(job):
@@ -123,6 +142,9 @@ def main():
             errors = 0
             if not job and res.get("fetch"):
                 run_fetch(res["fetch"])
+                continue
+            if not job and res.get("keep"):
+                run_keep(st, res["keep"])
                 continue
             if job:
                 if job["id"] in st["printed"]:  # printed before, only the answer got lost
