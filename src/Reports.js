@@ -205,7 +205,7 @@ function cardsTick(now) {
   if (dirty) saveCards_(all);
 }
 
-// called from tick(): cards hourly; on the 1st, last month's clinic summary + Retorno button
+// called from tick(): cards hourly; postponed Retorno question; on the 1st, last month's clinic summary + Retorno question
 function reportsTick() {
   const now = new Date();
   const hour = Utilities.formatDate(now, HOME_TZ, 'yyyy-MM-dd HH');
@@ -213,6 +213,7 @@ function reportsTick() {
     P.setProperty('CARDS_CHECKED', hour);
     try { cardsTick(now); } catch (e) { log('cards error', String(e && e.stack || e)); }
   }
+  try { rtAskTick_(now); } catch (e) { log('retorno ask error', String(e && e.stack || e)); }
   if (prop('KLINKA_AUTO') === '0') return;
   if (Utilities.formatDate(now, HOME_TZ, 'd') !== '1') return;
   if (Utilities.formatDate(now, HOME_TZ, 'HH:mm') < (prop('KLINKA_AUTO_AT') || '08:00')) return;
@@ -222,14 +223,110 @@ function reportsTick() {
   const { m, y } = reportMonth_('', now);
   klinkaCmd(m + '.' + y);
   if (prop('RETORNO_TEMPLATE_ID') && prop('RETORNO_FOLDER_ID'))
-    try { retornoPreview(m, y); } catch (e) { log('retorno preview error', String(e && e.stack || e)); }
+    try { rtAsk_(m, y); } catch (e) { log('retorno ask error', String(e && e.stack || e)); }
+}
+
+// ----- on the 1st: ask first ("create now?") with postpone buttons, instead of sending the preview by itself -----
+// RT_ASK = {m, y, at}: ask again at `at` (epoch ms). Unanswered questions come back after RT_ASK_AGAIN_H hours (default 24).
+// buttons: "rt:a:<code>.<M>.<YYYY>" code = now | <minutes> | tm (tomorrow 08:00) | ev (today 20:00) | pick | x
+//          "rt:ah:<M>.<YYYY>.<yyyyMMddHH>" a chosen hour from the picker
+// free text: "רטורנו בעוד 3 שעות" / "רטורנו מחר ב-10" / "רטורנו ב-18:30" / "רטורנו מחר" postpone the question.
+function rtAsk_(m, y) {
+  if (rtExisting_(m, y).length === RETORNO_PROJECTS.length) { P.deleteProperty('RT_ASK'); return; } // already made by hand
+  P.setProperty('RT_ASK', JSON.stringify({ m, y, at: Date.now() + Number(prop('RT_ASK_AGAIN_H') || 24) * 36e5 }));
+  const my = m + '.' + y, mm = m + '.' + String(y % 100).padStart(2, '0');
+  send('📄 ליצור עכשיו את דוחות רטורנו ' + mm + '?', [
+    [{ text: '✅ כן, עכשיו', callback_data: 'rt:a:now.' + my }],
+    [{ text: 'בעוד שעה', callback_data: 'rt:a:60.' + my }, { text: 'בעוד 3 שעות', callback_data: 'rt:a:180.' + my }, { text: 'הערב 20:00', callback_data: 'rt:a:ev.' + my }],
+    [{ text: 'מחר 08:00', callback_data: 'rt:a:tm.' + my }, { text: '🕗 שעה אחרת', callback_data: 'rt:a:pick.' + my }, { text: '✖️ לא עכשיו', callback_data: 'rt:a:x.' + my }]]);
+}
+
+function rtAskTick_(now) {
+  const a = rtAskGet_();
+  if (a && now.getTime() >= a.at) rtAsk_(a.m, a.y);
+}
+
+function rtAskGet_() { try { return JSON.parse(prop('RT_ASK') || 'null'); } catch (e) { return null; } }
+
+// a time in Israel: day offset from today + hour (and minutes)
+function rtAt_(dayOff, h, min) {
+  const day = Utilities.formatDate(new Date(Date.now() + dayOff * 864e5), HOME_TZ, 'yyyy-MM-dd');
+  return Utilities.parseDate(day + ' ' + String(h).padStart(2, '0') + ':' + String(min || 0).padStart(2, '0'), HOME_TZ, 'yyyy-MM-dd HH:mm');
+}
+
+function rtPostpone_(m, y, when) {
+  P.setProperty('RT_ASK', JSON.stringify({ m, y, at: when.getTime() }));
+  return '⏰ אשאל שוב על רטורנו ' + m + '.' + String(y % 100).padStart(2, '0') + ' ב' + fmt(when);
+}
+
+// free-text postpone; returns a Date, or null when the text has no time
+function rtWhen_(text) {
+  let t = text.match(/בעוד\s*(חצי שעה|שעתיים|שעה|(\d+)\s*(שעות|שעה|דקות|דק))/);
+  if (t) {
+    const min = t[1] === 'חצי שעה' ? 30 : t[1] === 'שעתיים' ? 120 : t[1] === 'שעה' ? 60 : Number(t[2]) * (/^ש/.test(t[3]) ? 60 : 1);
+    return new Date(Date.now() + min * 60000);
+  }
+  const tm = /מחר/.test(text);
+  t = text.match(/ב\s?-?\s?(\d{1,2})(?::(\d{2}))?(?![./\d])/);
+  if (t && Number(t[1]) <= 23) {
+    let d = rtAt_(tm ? 1 : 0, Number(t[1]), Number(t[2] || 0));
+    if (!tm && d.getTime() <= Date.now()) d = rtAt_(1, Number(t[1]), Number(t[2] || 0)); // "ב-8" at 10:00 = tomorrow
+    return d;
+  }
+  if (tm) return rtAt_(1, 8);
+  if (/הערב/.test(text)) return rtAt_(0, 20);
+  return null;
+}
+
+function rtAskButton_(q, k, arg) {
+  const chat = q.message.chat.id, mid = q.message.message_id, mm = (m, y) => m + '.' + String(y % 100).padStart(2, '0');
+  const answer = t => tg('answerCallbackQuery', { callback_query_id: q.id, text: t || '' });
+  const close = line => tg('editMessageText', { chat_id: chat, message_id: mid, text: q.message.text + '\n' + line });
+  if (k === 'ah') {
+    const [m, y, h] = arg.split('.');
+    const when = Utilities.parseDate(h, HOME_TZ, 'yyyyMMddHH');
+    answer('נדחה');
+    return close(rtPostpone_(Number(m), Number(y), when));
+  }
+  const [code, ms, ys] = arg.split('.'), m = Number(ms), y = Number(ys);
+  if (code === 'now') {
+    P.deleteProperty('RT_ASK');
+    answer();
+    close('✅ פותח תצוגה מקדימה');
+    return retornoPreview(m, y);
+  }
+  if (code === 'x') {
+    P.deleteProperty('RT_ASK');
+    answer();
+    return close('✖️ לא אשאל שוב. כשתרצה: "רטורנו ' + mm(m, y) + '"');
+  }
+  if (code === 'pick') { // hours picker: the rest of today and tomorrow, 07:00-22:00
+    const kb = [], nowH = Number(Utilities.formatDate(new Date(), HOME_TZ, 'H'));
+    [0, 1].forEach(off => {
+      const day = Utilities.formatDate(new Date(Date.now() + off * 864e5), HOME_TZ, 'yyyyMMdd');
+      if (!off && nowH >= 22) return; // nothing left today
+      kb.push([{ text: off ? '— מחר —' : '— היום —', callback_data: 'rt:n:' }]);
+      let row = [];
+      for (let h = off ? 7 : Math.max(7, nowH + 1); h <= 22; h++) {
+        row.push({ text: String(h).padStart(2, '0') + ':00', callback_data: 'rt:ah:' + m + '.' + y + '.' + day + String(h).padStart(2, '0') });
+        if (row.length === 4) { kb.push(row); row = []; }
+      }
+      if (row.length) kb.push(row);
+    });
+    answer();
+    return tg('editMessageText', { chat_id: chat, message_id: mid, text: '🕗 מתי לשאול שוב על רטורנו ' + mm(m, y) + '?\n(או כתוב למשל: "רטורנו מחר ב-17:30")', reply_markup: { inline_keyboard: kb } });
+  }
+  const when = code === 'tm' ? rtAt_(1, 8) : code === 'ev' ? (rtAt_(0, 20).getTime() > Date.now() ? rtAt_(0, 20) : rtAt_(1, 20))
+    : new Date(Math.ceil((Date.now() + Number(code) * 60000) / 60000) * 60000);
+  answer('נדחה');
+  return tg('editMessageText', { chat_id: chat, message_id: mid, text: '📄 דוחות רטורנו ' + mm(m, y) + '\n' + rtPostpone_(m, y, when) });
 }
 
 // ===== Retorno monthly hour reports (replaces Secretary/retorno.py) =====
 // One .docx per project, built from a Word template in Drive by editing word/document.xml inside the zip,
 // so the layout stays exactly as in the template. Saved to the reports folder in Drive and sent on Telegram.
 // Never overwrites: a report that already exists in the folder is only re-sent.
-// Triggers: "רטורנו" / "דוחות רטורנו 11.26" [מחדש], /retorno [M.YY]: a preview to fix dates first; on the 1st the preview comes by itself.
+// Triggers: "רטורנו" / "דוחות רטורנו 11.26" [מחדש], /retorno [M.YY]: a preview to fix dates first; on the 1st the bot first asks "create now?" (postpone buttons).
 // Script Properties: RETORNO_TEMPLATE_ID (the template .docx), RETORNO_FOLDER_ID (where reports go)
 const RETORNO_PROJECTS = [ // [project, [[weekday 0=Sun, start, end, hours, notes, price], ...]], same as retorno.py
   ['חוסן', [[1, '13:30', '14:30', '1', 'ותיקים', 450], [2, '11:00', '14:00', '3', 'חוסן *2', 900]]],
@@ -437,7 +534,15 @@ function retornoPreview(m, y) { const v = rtPreview_(m, y); send(v.text, v.kb); 
 // "רטורנו 11.26" -> preview; "רטורנו 11.26 מחדש" -> existing files of the month go to the trash, then preview
 function retornoCmd(text) {
   if (!prop('RETORNO_TEMPLATE_ID') || !prop('RETORNO_FOLDER_ID')) return send('חסר RETORNO_TEMPLATE_ID או RETORNO_FOLDER_ID ב-Script Properties.');
+  const when = rtWhen_(text);
+  if (when) { // "רטורנו מחר ב-10": postpone the question (for the month being asked about, else last month)
+    const a = rtAskGet_(), r = a || reportMonth_(text.replace(/ב\s?-?\s?\d{1,2}(:\d{2})?(?![./\d])/g, ''));
+    if (when.getTime() <= Date.now()) return send('הזמן הזה כבר עבר.');
+    return send(rtPostpone_(r.m, r.y, when));
+  }
   const { m, y } = reportMonth_(text);
+  const a = rtAskGet_();
+  if (a && a.m === m && a.y === y) P.deleteProperty('RT_ASK'); // handled by hand: stop asking
   if (/מחדש/.test(text)) {
     const folder = DriveApp.getFolderById(prop('RETORNO_FOLDER_ID')), gone = [];
     RETORNO_PROJECTS.forEach(([p]) => { const it = folder.getFilesByName(retornoName_(p, m, y)); while (it.hasNext()) { const f = it.next(); f.setTrashed(true); gone.push(f.getName()); } });
@@ -453,6 +558,7 @@ function retornoButton(q, k) {
   const parts = String(q.data).split(':'), arg = parts[2] || '', chat = q.message.chat.id, mid = q.message.message_id;
   const answer = t => tg('answerCallbackQuery', { callback_query_id: q.id, text: t || '' });
   if (k === 'n') return answer();
+  if (k === 'a' || k === 'ah') return rtAskButton_(q, k, arg);
   if (k === 'x') { answer(); return tg('editMessageReplyMarkup', { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [] } }); }
   if (k === 't') {
     const [m, y, who, d] = arg.split('.'), date = String(d).padStart(2, '0') + '/' + String(m).padStart(2, '0') + '/' + y;
