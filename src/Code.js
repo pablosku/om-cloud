@@ -111,7 +111,10 @@ function handle(row, live) {
   const t = tab_('inbox', INBOX_H.concat('reply_to'));
   const [time, , text, , tries, replyTo] = t.getRange(row, 1, 1, 6).getValues()[0];
   t.getRange(row, 5).setValue(Number(tries || 0) + 1);
-  const p = parse(text, new Date(time));
+  // a follow-up to my question: read it together with the earlier message (kept for 30 min)
+  const pend = JSON.parse(prop('PENDING') || 'null');
+  const prev = pend && new Date(time).getTime() - pend.at < 30 * 60000 && pend.row !== row ? pend.text : '';
+  const p = parse(text, new Date(time), prev);
   if (!p) {
     t.getRange(row, 4).setValue('new');
     P.setProperty('INBOX_PENDING', '1');
@@ -120,29 +123,45 @@ function handle(row, live) {
     return;
   }
   t.getRange(row, 4).setValue('done');
-  if (p.intent === 'list') return send(listText(7));
+  if (p.intent === 'list') { P.deleteProperty('PENDING'); return send(listText(7)); }
   const target = replyTo && prop('m_' + replyTo); // a reply to an alert = new time for that reminder
-  if (target && p.when) return moveTo(target, p.when);
-  if (p.intent !== 'reminder' || !p.when || !p.text) return send(p.reply || 'על מה ומתי להזכיר?');
-  create(p);
+  if (target && p.when) { P.deleteProperty('PENDING'); return moveTo(target, p.when); }
+  // multi-line message: line 1 = when, the rest = what (also when Gemini lost the text)
+  const lines = String(text).split(/\n+/).map(s => s.trim()).filter(String);
+  if (p.when && !p.text && lines.length > 1) { p.intent = 'reminder'; p.text = lines.slice(1).join('\n'); }
+  if (p.intent !== 'reminder' || !p.when || !p.text) {
+    log('not a reminder', String(text).slice(0, 200), prev ? 'prev: ' + prev.slice(0, 200) : '', p);
+    P.setProperty('PENDING', JSON.stringify({ text: (prev ? prev + '\n' : '') + text, at: new Date(time).getTime(), row }));
+    return send('❓ לא יצרתי תזכורת. ' + (p.question || 'על מה ומתי להזכיר?'));
+  }
+  P.deleteProperty('PENDING');
+  try { create(p); }
+  catch (e) { log('create error', String(e && e.stack || e)); send('⚠️ לא הצלחתי לשמור ביומן: "' + p.text + '". תשלח שוב?'); }
 }
 
 // ---------- brain ----------
-function parse(text, at) {
+function parse(text, at, prev) {
   const tz = userTz();
   const now = Utilities.formatDate(at, tz, 'yyyy-MM-dd HH:mm EEEE');
   const prompt = `You parse Hebrew reminder requests for an Israeli user. Current local time: ${now} (${tz}).
-Week starts Sunday. "workdays" = Sunday to Thursday.
+Week starts Sunday. "workdays" = Sunday to Thursday. "ביום רביעי הבא" = the next Wednesday after today.
 Defaults: בבוקר=09:00, בצהריים=13:00, אחה"צ=16:00, בערב=19:00, בלילה=22:00, a date without a time=09:00.
+A bare hour without בבוקר/בערב: 7-12 = morning (ב8 = 08:00), 1-6 = afternoon (ב3 = 15:00).
 A time of day that already passed today, without a date, means tomorrow.
+The message may have several lines (voice typing). Usually the first line says when, and the next lines are what to remind.
+Keep the full content of those lines as the text, even when it is a long list or looks odd. Never drop content.
 Answer JSON only:
 {"intent":"reminder"|"list"|"other",
- "text": short Hebrew description of what to remind, without the time words, or null if missing,
+ "text": Hebrew description of what to remind, without the time words, or null if missing,
  "when": "YYYY-MM-DD HH:MM" local time or null,
  "repeat": null|"daily"|"weekly"|"monthly"|"workdays",
- "reply": short Hebrew question or answer when it is not a complete reminder, else null}
+ "question": short Hebrew question asking only for what is missing (what, or when), else null}
 "list" = the user asks what reminders he has. A message that is only a time (like "ב-17:30") is intent "reminder" with text null.
-Message: ${text}`;
+You only read the message. You cannot save or do anything, so the question must never say that something was saved or done.
+${prev ? `The user is answering my question about his earlier message. Combine both into one reminder.
+If the follow-up is a new, complete request on its own, ignore the earlier message.
+Earlier message: ${prev}
+Follow-up message: ${text}` : `Message: ${text}`}`;
   const body = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0 } });
   for (const model of models()) {
@@ -176,6 +195,7 @@ function recurrence_(rep) {
 }
 
 function create(p) {
+  p.text = String(p.text).trim().replace(/\s*\n+\s*/g, ' · '); // one-line event title
   const rep = REP[p.repeat] ? p.repeat : null;
   const start = Utilities.parseDate(p.when, rep ? HOME_TZ : userTz(), 'yyyy-MM-dd HH:mm'); // series live in Israel time
   if (isNaN(start.getTime())) return send('לא הבנתי את הזמן. תנסח שוב?');
