@@ -24,12 +24,12 @@ const FETCH_TIMEOUT = 10 * 60000, FETCH_DAYS = 3; // 'sent' with no answer goes 
 // one row per sender. from: one or more addresses; subject: optional words the subject must contain.
 // get(msg) -> { blob, caption }, or with via: 'laptop': reqs(msg) -> [{url, method?, body?, type?}] and
 // build(msg, answers) -> { blob, caption } (answers[i] = {code, text} of reqs[i]). telegram: send the PDF here. print: a print-queue caption ('' = defaults,
-// '1 בלי תמונות' = first page, no images), or false. drive: also a copy in the Drive folder "OM חשבונות".
+// '1 בלי תמונות' = first page, no images), or false. ask: print only after Pablo taps 🖨️ הדפס. drive: also a copy in the Drive folder "OM חשבונות".
 const BILL_RULES = [
   { id: 'meiavivim', name: 'מי אביבים (מים)', from: ['noreply@meiavivim.co.il'], via: 'laptop', reqs: meiAvivimReqs_, build: meiAvivimBuild_,
     telegram: true, print: false, drive: false },
   { id: 'meimodiin', name: 'מי מודיעין (מים)', from: ['btm@mei-modiin.co.il', 'btm.mei-modiin@printernet.co.il'], subject: 'חשבון תקופתי',
-    get: attachedPdf_('💧 חשבון מים, מי מודיעין'), telegram: false, print: '1 בלי תמונות', drive: false }, // page = one template image: pdfclean keeps its dark parts
+    get: attachedPdf_('💧 חשבון מים, מי מודיעין'), telegram: false, print: '1 בלי תמונות', ask: true, drive: false }, // page = one template image: pdfclean keeps its dark parts
 ];
 
 function billLabel_(name) {
@@ -84,7 +84,7 @@ function billsTick(force) {
 function billDeliver_(rule, b) {
   if (rule.telegram) sendDoc_(b.blob, b.caption);
   if (rule.drive) billFolder_().createFile(b.blob.copyBlob());
-  if (rule.print !== false) mailPrint_(b.blob, 'bill:' + rule.id, rule.print, rule.telegram ? '' : b.caption);
+  if (rule.print !== false) mailPrint_(b.blob, 'bill:' + rule.id, rule.print, rule.telegram ? '' : b.caption, rule.ask);
 }
 
 // ---------- requests run by the laptop ----------
@@ -160,7 +160,7 @@ function billsCmd() {
   billsTick(true);
   const waiting = billLabel_(BILL_TODO).getThreads(0, 20).length;
   send('🧾 חשבונות ממייל (בדיקה כל ' + BILL_EVERY_MIN + ' דקות):\n' +
-    BILL_RULES.map(r => '• ' + r.name + ': ' + [r.telegram && 'PDF לטלגרם', r.print !== false && 'הדפסה (' + captionSummary_(r.print) + ')',
+    BILL_RULES.map(r => '• ' + r.name + ': ' + [r.telegram && 'PDF לטלגרם', r.print !== false && (r.ask ? 'הדפסה אחרי אישור (' : 'הדפסה (') + captionSummary_(r.print) + ')',
       r.drive && 'שמירה בדרייב'].filter(Boolean).join(' + ')).join('\n') +
     '\n\nמחכים לטיפול בתווית ' + BILL_TODO + ': ' + waiting);
 }

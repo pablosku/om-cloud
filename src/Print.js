@@ -21,13 +21,20 @@ function doGet(e) {
   try {
     if (q.action === 'pull') return printPull_(q);
     if (q.action === 'done') return printDone_(q);
+    if (q.action === 'keepdone') return keepDone_(q); // Keep.gs
   } catch (err) { log('doGet error', q.action, String(err && err.stack || err)); return out_('error'); }
   return out_('?');
 }
 
+// no print job: one fetch job (Bills.gs) or else one shopping-list job (Keep.gs) per pull
+function idlePull_() {
+  const fetch = fetchPull_();
+  return { job: null, fetch, keep: fetch ? null : keepPull_() };
+}
+
 function printPull_(q) {
   P.setProperty('LAPTOP_SEEN', String(Date.now())); // every pull is also the heartbeat
-  if (!prop('JOBS_PENDING')) return json_({ job: null, fetch: fetchPull_() }); // Bills.gs: web requests the cloud cannot make
+  if (!prop('JOBS_PENDING')) return json_(idlePull_()); // Bills.gs / Keep.gs: work the cloud cannot do
   const lock = LockService.getUserLock();
   if (!lock.tryLock(5000)) return json_({ job: null, busy: true });
   try {
@@ -39,7 +46,7 @@ function printPull_(q) {
       if (st === 'waiting' && i < 0) i = k; // oldest first
     }
     if (!open) P.deleteProperty('JOBS_PENDING');
-    if (i < 0) return json_({ job: null, fetch: fetchPull_() });
+    if (i < 0) return json_(idlePull_());
     const r = rows[i], row = i + 1, tries = Number(r[J.tries] || 0) + 1;
     let bytes;
     try {
@@ -118,7 +125,7 @@ function captionSummary_(c) {
   return parts.join(' · ');
 }
 
-// ---------- buttons pc:<id> (cancel) and pr:<id> (retry), called from onButton ----------
+// ---------- buttons pc:<id> (cancel), pr:<id> (retry), pa:<id> (approve a job waiting in 'ask'), called from onButton ----------
 function printButton(q, act, id) {
   const answer = text => tg('answerCallbackQuery', { callback_query_id: q.id, text });
   const lock = LockService.getUserLock();
@@ -132,7 +139,12 @@ function printButton(q, act, id) {
       if (st === 'sent') return answer('המחשב כבר מדפיס אותו');
       if (st === 'printed') return answer('כבר הודפס');
       if (st !== 'cancelled') { setCell_(t, row, 'status', 'cancelled'); setCell_(t, row, 'done_at', new Date()); }
-      line = '❌ בוטל';
+      line = st === 'ask' ? '🚫 לא מדפיס' : '❌ בוטל';
+    } else if (act === 'pa') {
+      if (st !== 'ask') return answer(st === 'cancelled' ? 'בוטל כבר' : 'כבר בתור');
+      setCell_(t, row, 'status', 'waiting');
+      P.setProperty('JOBS_PENDING', '1');
+      line = '✅ נכנס לתור' + (laptopOnline_() ? ', יודפס בעוד פחות מדקה' : ' (יודפס כשהמחשב יחזור)');
     } else {
       if (st !== 'failed') return answer('אין מה לנסות שוב');
       setCell_(t, row, 'status', 'waiting');
@@ -235,10 +247,6 @@ function notify_(r, text, kb) {
 function printSetup() {
   printFolder_();
   jobsTab_();
-  tg('setMyCommands', { commands: [
-    { command: 'list', description: 'תזכורות קרובות' },
-    { command: 'queue', description: 'מה מחכה להדפסה' },
-    { command: 'tz', description: 'אזור זמן בחו״ל' },
-    { command: 'help', description: 'עזרה' }] });
+  tg('setMyCommands', { commands: BOT_COMMANDS });
   send('תור ההדפסה מוכן ✅ שלח לי PDF.');
 }
