@@ -5,6 +5,8 @@ Live web-app deployment: `AKfycbwtF-…BQwCyDVpIQ` (same URL every time, the Wor
 
 | OM version | Date | Apps Script version | Commit | Changes |
 |---|---|---|---|---|
+| v19 | 26.11.2026 | @20 | d7b654b | reminders: "ב15" = hour + fixParse_; Mei Avivim via laptop fetch jobs; pdfclean keeps template images' dark parts; print agent v2 |
+| v18 | 26.11.2026 | @19 | 54cd604 | bills from email: labels OM/חשבונות -> OM/טופל, Mei Avivim -> Telegram, Mei Modiin -> print |
 | v17 | 26.11.2026 | @18 | 698af69 | snooze reply fix: quick time parsing, snooze question kept when parsing fails |
 | v16 | 26.11.2026 | @17 | 050c9f2 | Mail: read-only Gmail + Drive search, summaries, follow-up questions, print PDFs from mail |
 | v15 | 26.11.2026 | @16 | 3b10773 | multi-line reminders, voice messages, custom snooze, reminder queries, Retorno asks first, clinic calendar, release notes |
@@ -14,3 +16,5 @@ v15: the 4 file hashes on the laptop matched `src/` at commit 3b10773 before `cl
 v16: the 5 file hashes on the laptop matched `src/` at commit 050c9f2.
 v17: the 5 file hashes matched `src/` at commit 698af69 (committed after deploy, no PR).
 TODO: `src/appsscript.json` is not in the repo yet (unchanged in v15); add it from the laptop clasp folder.
+v18/v19: Bills.js, Code.js matched src/ hashes. Print.js on the laptop = LIVE file (differs from src/Print.js) + the 2 fetchPull_ lines (hash aa4dd0e09dece25c); live Reports.js also differs from src/. TODO: copy live Print.js/Reports.js from the laptop into src/.
+Laptop: print_agent.py v2 + pdfclean.py from laptop/ at d7b654b (backups *.v18.bak in the Secretary folder).
