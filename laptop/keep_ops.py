@@ -1,5 +1,6 @@
 """Shopping list in Google Keep for the print agent (add only).
-Needs in .env:  KEEP_EMAIL=<gmail address>   KEEP_MASTER_TOKEN=<aas_et/...>   (keep_token.py writes both)
+Needs in .env:  KEEP_EMAIL, KEEP_MASTER_TOKEN=<aas_et/...>, KEEP_DEVICE_ID   (keep_token.py writes all three;
+Google may revoke a master token that is used from a different device id than the one it was issued to)
 The master token gives wide access to the Google account: it stays in this .env only, never in the cloud or git.
 Self-contained (reads its own .env). Imported lazily by print_agent.py, so a missing gkeepapi never stops printing.
 Test by hand:  python keep_ops.py "OM TEST" חלב "2 לחם"   (creates the list if it does not exist)"""
@@ -29,15 +30,17 @@ def _login():
     global _keep
     if _keep is None:
         import gkeepapi
-        email = load_env().get("KEEP_EMAIL", "").strip()
-        token = load_env().get("KEEP_MASTER_TOKEN", "").strip()
+        env = load_env()
+        email = env.get("KEEP_EMAIL", "").strip()
+        token = env.get("KEEP_MASTER_TOKEN", "").strip()
+        device_id = env.get("KEEP_DEVICE_ID", "").strip() or None  # the id keep_token.py got the token with
         if not email or not token:
             raise RuntimeError("חסר KEEP_EMAIL / KEEP_MASTER_TOKEN ב-.env במחשב")
         k = gkeepapi.Keep()
         if hasattr(k, "authenticate"):
-            k.authenticate(email, token)  # gkeepapi >= 0.15
+            k.authenticate(email, token, device_id=device_id)  # gkeepapi >= 0.15
         else:
-            k.resume(email, token)
+            k.resume(email, token, device_id=device_id)
         _keep = k
     else:
         _keep.sync()  # pick up what changed in the phone app since the last job
