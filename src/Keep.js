@@ -75,8 +75,8 @@ function keepDone_(q) {
       try { res = JSON.parse(q.msg || '{}'); } catch (e) {}
       const added = res.added || [], dup = res.dup || [];
       t.getRange(row, KJ.status + 1, 1, 5).setValues([['done', r[KJ.tries], r[KJ.sent_at], new Date(), JSON.stringify(res).slice(0, 300)]]);
-      keepEdit_(r, '✅ ב"' + keepList_() + '": ' + (added.length ? added.join(', ') : '—') +
-        (dup.length ? '\nכבר היו ברשימה: ' + dup.join(', ') : ''));
+      keepEdit_(r, added.length ? '✅ ב"' + keepList_() + '": ' + added.join(', ') + (dup.length ? '\nכבר היו ברשימה: ' + dup.join(', ') : '')
+        : '👍 כבר ברשימה: ' + (dup.join(', ') || JSON.parse(r[KJ.items]).join(', ')));
     } else { // try again on the next pull; keepPull_ gives up after KEEP_TRIES
       t.getRange(row, KJ.status + 1, 1, 5).setValues([['waiting', r[KJ.tries], new Date(), '', String(q.msg || 'שגיאה במחשב').slice(0, 300)]]); // sent_at = when it failed
       P.setProperty('KEEP_PENDING', '1');
