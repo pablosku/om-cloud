@@ -221,15 +221,15 @@ function reportsTick() {
   P.setProperty('KLINKA_SENT', ym); // set first: never send twice, even if sending fails
   const { m, y } = reportMonth_('', now);
   klinkaCmd(m + '.' + y);
-  if (prop('RETORNO_TEMPLATE_ID'))
-    send('ליצור את דוחות רטורנו ל' + MONTHS_HE[m - 1] + '?', [[{ text: '📄 צור ושלח', callback_data: 'rt:' + m + '.' + y }]]);
+  if (prop('RETORNO_TEMPLATE_ID') && prop('RETORNO_FOLDER_ID'))
+    try { retornoPreview(m, y); } catch (e) { log('retorno preview error', String(e && e.stack || e)); }
 }
 
 // ===== Retorno monthly hour reports (replaces Secretary/retorno.py) =====
 // One .docx per project, built from a Word template in Drive by editing word/document.xml inside the zip,
 // so the layout stays exactly as in the template. Saved to the reports folder in Drive and sent on Telegram.
 // Never overwrites: a report that already exists in the folder is only re-sent.
-// Triggers: "רטורנו" / "דוחות רטורנו 11.26", /retorno [M.YY], and a button that the 1st-of-month message offers.
+// Triggers: "רטורנו" / "דוחות רטורנו 11.26" [מחדש], /retorno [M.YY]: a preview to fix dates first; on the 1st the preview comes by itself.
 // Script Properties: RETORNO_TEMPLATE_ID (the template .docx), RETORNO_FOLDER_ID (where reports go)
 const RETORNO_PROJECTS = [ // [project, [[weekday 0=Sun, start, end, hours, notes, price], ...]], same as retorno.py
   ['חוסן', [[1, '13:30', '14:30', '1', 'ותיקים', 450], [2, '11:00', '14:00', '3', 'חוסן *2', 900]]],
@@ -314,9 +314,8 @@ function fillDocXml_(xml, project, m, y, rows) {
   return xml.replace(tbl[0], () => newTbl);
 }
 
-function retornoDocx_(template, project, sessions, m, y) {
+function retornoDocx_(template, project, rows, m, y) {
   const parts = Utilities.unzip(template.copyBlob().setContentType('application/zip'));
-  const rows = retornoRows_(sessions, m, y);
   const blobs = parts.map(b => b.getName() !== 'word/document.xml' ? b :
     Utilities.newBlob(fillDocXml_(b.getDataAsString('UTF-8'), project, m, y, rows), 'application/xml', 'word/document.xml'));
   const name = retornoName_(project, m, y);
@@ -353,28 +352,171 @@ function sendDoc_(blob, caption) {
   if (!j.ok) { log('tg error sendDocument', j.description); throw new Error(j.description); }
 }
 
+// ----- month edits: cancelled sessions and staff meetings -----
+// Script Property RT_EDITS = {"2026-11": {"off": ["חוסן|10/11/2026", ...], "staff": ["18/11/2026", ...]}}
+// All edits are made on the preview that "רטורנו 11.26" shows before creating: one button per date (✅ / ❌),
+// "➕ ישיבת צוות" opens a day picker (tap a staff meeting in the preview to remove it), then "📄 צור ושלח".
+const RETORNO_STAFF = { project: 'חוסן', start: '20:30', end: '22:00', hours: '1.5', price: 300, topic: 'יוגה', notes: 'ישיבת צוות' };
+const RETORNO_SORT_BY_DATE = false; // false: staff meetings after the regular sessions; true: all rows by date
+const ymKey_ = (m, y) => y + '-' + String(m).padStart(2, '0');
+const ddmm_ = date => date.slice(0, 5).replace('/', '.');
+
+function rtEdits_() { try { return JSON.parse(prop('RT_EDITS') || '{}'); } catch (e) { return {}; } }
+function rtMonth_(all, m, y) { const k = ymKey_(m, y); all[k] = all[k] || { off: [], staff: [] }; return all[k]; }
+function rtSave_(all) { // keep the last 6 months only
+  Object.keys(all).sort().slice(0, -6).forEach(k => delete all[k]);
+  P.setProperty('RT_EDITS', JSON.stringify(all));
+}
+
+// rows of one project for the month, after edits; each row has .key (project|date) and .on
+function retornoMonthRows_(pi, m, y, ed) {
+  const [project, sessions] = RETORNO_PROJECTS[pi];
+  let rows = retornoRows_(sessions, m, y).map(r => Object.assign(r, { key: project + '|' + r.date }));
+  if (project === RETORNO_STAFF.project) {
+    const S = RETORNO_STAFF;
+    rows = rows.concat(ed.staff.slice().sort((a, b) => Number(a.slice(0, 2)) - Number(b.slice(0, 2))).map(date => {
+      const d = Number(date.slice(0, 2));
+      return { price: String(S.price), topic: S.topic, notes: S.notes, hours: S.hours, end: S.end, start: S.start,
+        day: HE_DAY_LETTER[new Date(y, m - 1, d).getDay()], date, d, key: 'staff|' + date, staff: true };
+    }));
+  }
+  if (RETORNO_SORT_BY_DATE) rows.sort((a, b) => a.d - b.d);
+  rows.forEach(r => r.on = ed.off.indexOf(r.key) < 0);
+  return rows;
+}
+
+// files of the month that already exist in the reports folder
+function rtExisting_(m, y) {
+  const folder = DriveApp.getFolderById(prop('RETORNO_FOLDER_ID'));
+  return RETORNO_PROJECTS.map(p => retornoName_(p[0], m, y)).filter(n => folder.getFilesByName(n).hasNext());
+}
+
+// ----- preview -----
+function rtPreview_(m, y) {
+  const ed = rtMonth_(rtEdits_(), m, y), hol = holidays_(m, y), mm = m + '.' + String(y % 100).padStart(2, '0');
+  const lines = ['📄 רטורנו ' + mm + ': לבדוק לפני יצירה', 'לחיצה על תאריך: ✅ היה / ❌ בוטל. לחיצה על ישיבת צוות מוחקת אותה.', ''], kb = [];
+  let th = 0, tp = 0;
+  RETORNO_PROJECTS.forEach(([project], pi) => {
+    const rows = retornoMonthRows_(pi, m, y, ed), on = rows.filter(r => r.on);
+    const h = on.reduce((s, r) => s + Number(r.hours), 0), p = on.reduce((s, r) => s + Number(r.price), 0);
+    th += h; tp += p;
+    lines.push('• ' + project + ': ' + on.length + ' מפגשים, ' + h + ' שעות, ' + p + ' ₪');
+    // one header per session type (by the notes column), dates in order under it: "חוסן", "חוסן ותיקים", "חוסן ישיבות צוות"
+    const groups = [];
+    rows.forEach(r => {
+      const g = r.staff ? 'ישיבות צוות' : r.notes, last = groups[groups.length - 1];
+      if (last && last.g === g) last.rows.push(r); else groups.push({ g, rows: [r] });
+    });
+    groups.forEach(G => G.rows.sort((a, b) => a.d - b.d));
+    let row = [];
+    const flush = () => { if (row.length) kb.push(row); row = []; };
+    groups.forEach(G => {
+      flush();
+      const label = groups.length === 1 || G.g.indexOf(project) >= 0 ? project : project + ' ' + G.g;
+      kb.push([{ text: '— ' + label + ' —', callback_data: 'rt:n:' }]);
+      G.rows.forEach(r => {
+      const mark = !r.on ? '❌' : hol[r.date] ? '⚠️' : '✅';
+      row.push({ text: (r.staff ? '🗑 ' : mark + ' ') + ddmm_(r.date) + (r.staff ? ' צוות' : ''), callback_data: 'rt:t:' + m + '.' + y + '.' + (r.staff ? 's' : pi) + '.' + r.d });
+      if (row.length === 4) flush();
+      });
+    });
+    flush();
+  });
+  lines.push('סה״כ: ' + th + ' שעות, ' + tp + ' ₪');
+  const w = Object.keys(hol).filter(d => RETORNO_PROJECTS.some((p, pi) => retornoMonthRows_(pi, m, y, ed).some(r => r.date === d)));
+  if (w.length) lines.push('', '⚠️ חג: ' + w.map(d => ddmm_(d) + ' ' + hol[d]).join(', '));
+  const ex = rtExisting_(m, y);
+  if (ex.length) lines.push('', 'כבר קיימים בדרייב (לא ייווצרו מחדש): ' + ex.map(n => n.replace('.docx', '')).join(', '));
+  kb.push([{ text: '➕ ישיבת צוות', callback_data: 'rt:add:' + m + '.' + y }]);
+  kb.push([{ text: '📄 צור ושלח', callback_data: 'rt:go:' + m + '.' + y }, { text: '✖️ סגור', callback_data: 'rt:x:' }]);
+  return { text: lines.join('\n'), kb };
+}
+
+function retornoPreview(m, y) { const v = rtPreview_(m, y); send(v.text, v.kb); }
+
+// "רטורנו 11.26" -> preview; "רטורנו 11.26 מחדש" -> existing files of the month go to the trash, then preview
+function retornoCmd(text) {
+  if (!prop('RETORNO_TEMPLATE_ID') || !prop('RETORNO_FOLDER_ID')) return send('חסר RETORNO_TEMPLATE_ID או RETORNO_FOLDER_ID ב-Script Properties.');
+  const { m, y } = reportMonth_(text);
+  if (/מחדש/.test(text)) {
+    const folder = DriveApp.getFolderById(prop('RETORNO_FOLDER_ID')), gone = [];
+    RETORNO_PROJECTS.forEach(([p]) => { const it = folder.getFilesByName(retornoName_(p, m, y)); while (it.hasNext()) { const f = it.next(); f.setTrashed(true); gone.push(f.getName()); } });
+    if (gone.length) send('🗑 הועברו לפח בדרייב: ' + gone.map(n => n.replace('.docx', '')).join(', '));
+  }
+  retornoPreview(m, y);
+}
+
+// buttons: "rt:t:<M>.<YYYY>.<pi|s>.<day>" toggle (s = staff: remove), "rt:add:<M>.<YYYY>" day picker, "rt:sd:<M>.<YYYY>.<day>" add staff,
+// "rt:back:<M>.<YYYY>" back to preview, "rt:go:<M>.<YYYY>" create, "rt:x:" close, "rt:n:" header,
+// and the old "rt:<M>.<YYYY>" (opens the preview)
+function retornoButton(q, k) {
+  const parts = String(q.data).split(':'), arg = parts[2] || '', chat = q.message.chat.id, mid = q.message.message_id;
+  const answer = t => tg('answerCallbackQuery', { callback_query_id: q.id, text: t || '' });
+  if (k === 'n') return answer();
+  if (k === 'x') { answer(); return tg('editMessageReplyMarkup', { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [] } }); }
+  if (k === 't') {
+    const [m, y, who, d] = arg.split('.'), date = String(d).padStart(2, '0') + '/' + String(m).padStart(2, '0') + '/' + y;
+    const key = (who === 's' ? 'staff' : RETORNO_PROJECTS[Number(who)][0]) + '|' + date;
+    const all = rtEdits_(), ed = rtMonth_(all, Number(m), Number(y)), i = ed.off.indexOf(key);
+    if (who === 's') { ed.staff = ed.staff.filter(x => x !== date); answer('🗑 ישיבת צוות ' + ddmm_(date)); }
+    else { if (i >= 0) ed.off.splice(i, 1); else ed.off.push(key); answer(i >= 0 ? '✅ ' + ddmm_(date) : '❌ ' + ddmm_(date)); }
+    rtSave_(all);
+    const v = rtPreview_(Number(m), Number(y));
+    return tg('editMessageText', { chat_id: chat, message_id: mid, text: v.text, reply_markup: { inline_keyboard: v.kb } });
+  }
+  if (k === 'add') { // day picker for a staff meeting
+    const [m, y] = arg.split('.').map(Number), days = new Date(y, m, 0).getDate(), kb = [];
+    for (let d = 1; d <= days; d++) {
+      if (d === 1 || new Date(y, m - 1, d).getDay() === 0) kb.push([]);
+      kb[kb.length - 1].push({ text: HE_DAY_LETTER[new Date(y, m - 1, d).getDay()] + ' ' + d, callback_data: 'rt:sd:' + m + '.' + y + '.' + d });
+    }
+    kb.push([{ text: '↩️ חזרה', callback_data: 'rt:back:' + m + '.' + y }]);
+    answer();
+    return tg('editMessageText', { chat_id: chat, message_id: mid, text: 'באיזה תאריך הייתה ישיבת צוות? (' + m + '.' + String(y % 100).padStart(2, '0') + ')', reply_markup: { inline_keyboard: kb } });
+  }
+  if (k === 'sd' || k === 'back') {
+    const [m, y, d] = arg.split('.').map(Number);
+    if (k === 'sd') {
+      const all = rtEdits_(), ed = rtMonth_(all, m, y), date = String(d).padStart(2, '0') + '/' + String(m).padStart(2, '0') + '/' + y;
+      if (ed.staff.indexOf(date) < 0) ed.staff.push(date);
+      rtSave_(all);
+      answer('➕ ישיבת צוות ' + ddmm_(date));
+    } else answer();
+    const v = rtPreview_(m, y);
+    return tg('editMessageText', { chat_id: chat, message_id: mid, text: v.text, reply_markup: { inline_keyboard: v.kb } });
+  }
+  const [m, y] = (k === 'go' ? arg : k).split('.').map(Number);
+  if (k !== 'go') { answer(); tg('editMessageReplyMarkup', { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [] } }); return retornoPreview(m, y); }
+  answer('יוצר...');
+  tg('editMessageReplyMarkup', { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [] } });
+  retornoRun(m, y);
+}
+
 function retornoRun(m, y) {
   const tid = prop('RETORNO_TEMPLATE_ID'), fid = prop('RETORNO_FOLDER_ID');
   if (!tid || !fid) return send('חסר RETORNO_TEMPLATE_ID או RETORNO_FOLDER_ID ב-Script Properties.');
   const lock = LockService.getUserLock(); // a double tap must not create the files twice (tick holds the script lock)
   if (!lock.tryLock(30000)) return send('כבר יוצר את הדוחות, רגע...');
   try {
-    const template = DriveApp.getFileById(tid).getBlob(), folder = DriveApp.getFolderById(fid);
+    const template = DriveApp.getFileById(tid).getBlob(), folder = DriveApp.getFolderById(fid), ed = rtMonth_(rtEdits_(), m, y);
     const hol = holidays_(m, y), lines = ['📄 דוחות רטורנו ' + m + '.' + String(y % 100).padStart(2, '0')], files = [], old = [];
     let th = 0, tp = 0;
     const warn = {};
-    RETORNO_PROJECTS.forEach(([project, sessions]) => {
+    RETORNO_PROJECTS.forEach(([project], pi) => {
       const name = retornoName_(project, m, y), ex = folder.getFilesByName(name);
       if (ex.hasNext()) { old.push(name.replace('.docx', '')); files.push(ex.next().getBlob()); return; }
-      const { docx, rows } = retornoDocx_(template, project, sessions, m, y);
+      const rows = retornoMonthRows_(pi, m, y, ed).filter(r => r.on);
+      if (!rows.length) { lines.push('• ' + project + ': אין מפגשים, לא נוצר דוח'); return; }
+      const { docx } = retornoDocx_(template, project, rows, m, y);
       folder.createFile(docx);
       files.push(docx);
       const h = rows.reduce((s, r) => s + Number(r.hours), 0), p = rows.reduce((s, r) => s + Number(r.price), 0);
       th += h; tp += p;
-      lines.push('• ' + project + ': ' + rows.length + ' מפגשים, ' + h + ' שעות, ' + p + ' ₪');
+      const off = retornoMonthRows_(pi, m, y, ed).filter(r => !r.on).length;
+      lines.push('• ' + project + ': ' + rows.length + ' מפגשים, ' + h + ' שעות, ' + p + ' ₪' + (off ? ' (' + off + ' בוטלו)' : ''));
       rows.forEach(r => { if (hol[r.date]) warn[r.date] = hol[r.date]; });
     });
-    if (files.length > old.length) lines.push('סה״כ: ' + th + ' שעות, ' + tp + ' ₪', 'לפי הלו״ז הקבוע. נשמר בדרייב.');
+    if (files.length > old.length) lines.push('סה״כ: ' + th + ' שעות, ' + tp + ' ₪', 'נשמר בדרייב.');
     if (old.length) lines.push('כבר היו קיימים ולא נגעתי בהם: ' + old.join(', '));
     const w = Object.keys(warn);
     if (w.length) lines.push('', '⚠️ מפגשים בימי חג, אולי לא התקיימו:', ...w.map(d => d.slice(0, 5) + ' ' + warn[d]));
@@ -386,19 +528,9 @@ function retornoRun(m, y) {
   } finally { lock.releaseLock(); }
 }
 
-function retornoCmd(text) { const { m, y } = reportMonth_(text); retornoRun(m, y); }
-
-// button "rt:<M>.<YYYY>" from the 1st-of-month message
-function retornoButton(q, arg) {
-  tg('answerCallbackQuery', { callback_query_id: q.id, text: 'יוצר...' });
-  tg('editMessageReplyMarkup', { chat_id: q.message.chat.id, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } });
-  const [m, y] = String(arg).split('.').map(Number);
-  retornoRun(m, y);
-}
-
 // run once by hand after setting the two properties: checks access and builds one test report in memory (nothing saved or sent)
 function retornoCheck() {
   const t = DriveApp.getFileById(prop('RETORNO_TEMPLATE_ID')), f = DriveApp.getFolderById(prop('RETORNO_FOLDER_ID'));
-  const { docx, rows } = retornoDocx_(t.getBlob(), RETORNO_PROJECTS[0][0], RETORNO_PROJECTS[0][1], 12, 2026);
+  const { docx, rows } = retornoDocx_(t.getBlob(), RETORNO_PROJECTS[0][0], retornoRows_(RETORNO_PROJECTS[0][1], 12, 2026), 12, 2026);
   Logger.log('template: ' + t.getName() + ' | folder: ' + f.getName() + ' | test ' + docx.getName() + ': ' + rows.length + ' rows, ' + docx.getBytes().length + ' bytes. OK');
 }

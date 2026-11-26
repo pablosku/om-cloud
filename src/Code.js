@@ -16,6 +16,8 @@ const userTz = () => prop('USER_TZ') || HOME_TZ;
 const models = () => (prop('GEMINI_MODELS') || 'gemini-flash-lite-latest,gemini-flash-latest').split(',').map(s => s.trim()).filter(String);
 const out_ = s => ContentService.createTextOutput(s);
 const cal_ = () => CalendarApp.getCalendarById(prop('CALENDAR_ID'));
+const RETORNO_RE = /^(דוחות |דו״חות |דוח |דו״ח |צור |תכין )?(ה)?רטורנו|(דוחות|דו״חות|דוח|דו״ח) (ה)?רטורנו/;
+const KLINKA_RE = /^(סיכום |דוח |דו״ח |שעות )?(ה)?קליניק|(שעות|סיכום|דוח|דו״ח) (ה)?קליניק/;
 
 // ---------- storage ----------
 function ss_() {
@@ -87,6 +89,9 @@ function onMessage(m) {
   const text = (m.text || '').trim();
   if (!text) return send('כרגע אני מבין רק טקסט ו-PDF להדפסה.');
   if (text.startsWith('/')) return command(text);
+  if (/כרטיסי{1,2}ה|כרטיסיות/.test(text)) return cardCmd(text); // Reports.gs
+  if (KLINKA_RE.test(text)) return klinkaCmd(text); // Reports.gs
+  if (RETORNO_RE.test(text)) return retornoCmd(text); // Reports.gs
   tg('sendChatAction', { chat_id: m.chat.id, action: 'typing' }); // instant sign that the message arrived
   const row = inboxAdd(new Date(m.date * 1000), m.message_id, text, m.reply_to_message ? m.reply_to_message.message_id : '');
   handle(row, true);
@@ -208,6 +213,7 @@ function onButton(q) {
     else tg('editMessageReplyMarkup', { chat_id: msg.chat.id, message_id: msg.message_id, reply_markup: { inline_keyboard: [] } });
   };
   if (act === 'pc' || act === 'pr') return printButton(q, act, k); // Print.gs
+  if (act === 'rt') return retornoButton(q, k); // Reports.gs
   const o = unkey_(k);
   if (!o) return finish('לא מצאתי, אולי כבר טופלה');
   if (act === 'x') {
@@ -238,6 +244,8 @@ function command(text) {
   const c = cmd.toLowerCase().replace(/@.*/, '');
   if (c === '/list') return send(listText(7));
   if (c === '/queue') return send(queueText());
+  if (c === '/klinka') return klinkaCmd(rest.join(' ')); // Reports.gs
+  if (c === '/retorno') return retornoCmd(rest.join(' ')); // Reports.gs
   if (c === '/tz') {
     const z = rest.join('');
     if (!z) return send('אזור זמן נוכחי: ' + userTz() + '\nבחו״ל: /tz Europe/London\nחזרה הביתה: /tz home');
@@ -247,7 +255,7 @@ function command(text) {
     P.setProperty('USER_TZ', z);
     return send('הבנתי, אתה ב-' + z + '. תזכורות חדשות יפורשו לפי השעון שם. תזכורות קיימות לא זזות.');
   }
-  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\n/tz אזור זמן בחו״ל\nתשובה (reply) להתראה עם שעה חדשה = דחייה לשעה הזו');
+  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\n/klinka שעות קליניקה בחודש שעבר (או: "קליניקה עדי 10.26")\n"כרטיסייה עדי" / "עדי קנתה כרטיסייה 20.11" / "כרטיסיות"\n/retorno דוחות רטורנו לחודש שעבר (או: "רטורנו 11.26")\n/tz אזור זמן בחו״ל\nתשובה (reply) להתראה עם שעה חדשה = דחייה לשעה הזו');
 }
 
 function listText(days) {
@@ -268,6 +276,8 @@ function tick() {
     morning();
   } catch (e) { log('tick error', String(e && e.stack || e)); }
   try { printTick(); // Print.gs
+  } catch (e) { log('tick error', String(e && e.stack || e)); }
+  try { reportsTick(); // Reports.gs
   } catch (e) { log('tick error', String(e && e.stack || e)); }
   finally { lock.releaseLock(); }
 }
@@ -337,6 +347,8 @@ function setup() {
   tg('setMyCommands', { commands: [
     { command: 'list', description: 'תזכורות קרובות' },
     { command: 'queue', description: 'מה מחכה להדפסה' },
+    { command: 'klinka', description: 'שעות קליניקה' },
+    { command: 'retorno', description: 'דוחות רטורנו' },
     { command: 'tz', description: 'אזור זמן בחו״ל' },
     { command: 'help', description: 'עזרה' }] });
   P.setProperty('MORNING', Utilities.formatDate(new Date(), userTz(), 'yyyy-MM-dd')); // first summary tomorrow
