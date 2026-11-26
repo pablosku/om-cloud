@@ -376,6 +376,7 @@ function command(text) {
   const c = cmd.toLowerCase().replace(/@.*/, '');
   if (c === '/list') return send(listText(7));
   if (c === '/queue') return send(queueText());
+  if (c === '/bills') return billsCmd(); // Bills.gs
   if (c === '/klinka') return klinkaCmd(rest.join(' ')); // Reports.gs
   if (c === '/retorno') return retornoCmd(rest.join(' ')); // Reports.gs
   if (c === '/tz') {
@@ -387,7 +388,7 @@ function command(text) {
     P.setProperty('USER_TZ', z);
     return send('הבנתי, אתה ב-' + z + '. תזכורות חדשות יפורשו לפי השעון שם. תזכורות קיימות לא זזות.');
   }
-  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\nיומן קליניקה: "תוסיף טיפול לעדי ביום שלישי ב-11", "תמחק טיפול של עדי ביום שלישי", "תזיז טיפול של עדי ביום שלישי ל-12", "מה יש בקליניקה מחר" (תמיד מאשר איתך לפני שינוי)\n/klinka שעות קליניקה בחודש שעבר (או: "קליניקה עדי 10.26")\n"כרטיסייה עדי" / "עדי קנתה כרטיסייה 20.11" / "כרטיסיות"\n/retorno דוחות רטורנו לחודש שעבר (או: "רטורנו 11.26")\n/tz אזור זמן בחו״ל\nמייל ומסמכים: "מתי הגיעה החשבונית מחברת החשמל?", "תמצא לי את פוליסת הביטוח" (רק קורא, לא שולח ולא מוחק)\nדחייה לשעה אחרת: כפתור 🕐 שעה אחרת, או תשובה (reply) להתראה או לאישור עם "תדחה ל-17:10"');
+  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\nיומן קליניקה: "תוסיף טיפול לעדי ביום שלישי ב-11", "תמחק טיפול של עדי ביום שלישי", "תזיז טיפול של עדי ביום שלישי ל-12", "מה יש בקליניקה מחר" (תמיד מאשר איתך לפני שינוי)\n/klinka שעות קליניקה בחודש שעבר (או: "קליניקה עדי 10.26")\n"כרטיסייה עדי" / "עדי קנתה כרטיסייה 20.11" / "כרטיסיות"\n/retorno דוחות רטורנו לחודש שעבר (או: "רטורנו 11.26")\n/tz אזור זמן בחו״ל\n/bills חשבונות שמגיעים במייל (מי אביבים נשלח לכאן, מי מודיעין להדפסה)\nמייל ומסמכים: "מתי הגיעה החשבונית מחברת החשמל?", "תמצא לי את פוליסת הביטוח" (רק קורא, לא שולח ולא מוחק)\nדחייה לשעה אחרת: כפתור 🕐 שעה אחרת, או תשובה (reply) להתראה או לאישור עם "תדחה ל-17:10"');
 }
 
 // answer to "what do I have on 15.12" / "is there a reminder about rent": date range and/or title keywords, series included
@@ -421,10 +422,13 @@ function listText(days) {
 
 // ---------- every minute ----------
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
-const VERSION = '17';
-const RELEASE_NOTES = '🆕 גרסה 17 עלתה. מה חדש:\n\n' +
-  '1. תיקון דחייה לשעה אחרת: תשובה עם שעה בלבד ("13:15", "היום 13:15", "מחר ב-9", "בעוד 20 דקות") דוחה מיד את התזכורת.\n' +
-  '2. אם לא הבנתי את השעה, אני ממשיך לחכות לתשובה, וההודעה הבאה עדיין תדחה את אותה תזכורת.';
+const VERSION = '18';
+const RELEASE_NOTES = '🆕 גרסה 18 עלתה. מה חדש:\n\n' +
+  '1. חשבונות ממייל: כשמגיע חשבון מים ממי אביבים, אני מוריד את החשבונית ושולח לך אותה כאן, עם הסכום ותאריך התשלום.\n' +
+  '2. חשבון מים ממי מודיעין נשלח אוטומטית להדפסה: עמוד ראשון בלבד, בלי תמונות. תקבל עדכון כשהודפס.\n' +
+  '3. המייל מקבל בג׳ימייל תווית OM/חשבונות, ואחרי הטיפול עובר ל-OM/טופל, כך ששום חשבון לא מטופל פעמיים ולא הולך לאיבוד.\n' +
+  '4. אפשר לשים את התווית OM/חשבונות ידנית על מייל, ואם יש לשולח כלל אטפל בו.\n' +
+  '5. /bills בודק עכשיו ומראה את הכללים.';
 function releaseNotes_() {
   if (prop('VERSION_SEEN') === VERSION) return;
   P.setProperty('VERSION_SEEN', VERSION); // set first: never send twice
@@ -443,6 +447,8 @@ function tick() {
   try { printTick(); // Print.gs
   } catch (e) { log('tick error', String(e && e.stack || e)); }
   try { reportsTick(); // Reports.gs
+  } catch (e) { log('tick error', String(e && e.stack || e)); }
+  try { billsTick(); // Bills.gs
   } catch (e) { log('tick error', String(e && e.stack || e)); }
   finally { lock.releaseLock(); }
 }
@@ -515,6 +521,7 @@ function setup() {
     { command: 'klinka', description: 'שעות קליניקה' },
     { command: 'retorno', description: 'דוחות רטורנו' },
     { command: 'tz', description: 'אזור זמן בחו״ל' },
+    { command: 'bills', description: 'חשבונות ממייל' },
     { command: 'help', description: 'עזרה' }] });
   P.setProperty('MORNING', Utilities.formatDate(new Date(), userTz(), 'yyyy-MM-dd')); // first summary tomorrow
   send('המזכירה בענן מוכנה ✅\nשלח לי תזכורת, למשל: "בעוד 5 דקות לבדוק את הבוט"');
