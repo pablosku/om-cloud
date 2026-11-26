@@ -375,10 +375,26 @@ function listText(days) {
 }
 
 // ---------- every minute ----------
+// ---------- release notes: sent once, on the first tick after a new version is pushed ----------
+const VERSION = '15';
+const RELEASE_NOTES = '🆕 גרסה 15 עלתה. מה חדש:\n\n' +
+  '1. תזכורת בכמה שורות: שורה ראשונה = מתי, השאר = הטקסט. הודעת המשך תוך 30 דק׳ מתחברת להודעה הקודמת.\n' +
+  '2. הודעה קולית 🎤 הופכת לתזכורת (אני מראה מה שמעתי).\n' +
+  '3. דחייה לשעה שתבחר: כפתור "🕐 שעה אחרת", או reply להתראה "תדחה ל17:10".\n' +
+  '4. שאלות על תזכורות: "מה יש לי מחר?", "מה יש לי השבוע?", "מתי הרופא?"\n' +
+  '5. רטורנו שואל לפני יצירת הדוחות, ואפשר לדחות.\n' +
+  '6. יומן הקליניקה: "תוסיף טיפול לעדי ביום שלישי ב11", "תזיז...", "תמחק...", "מה יש בקליניקה מחר?". כל שינוי מחכה ל-✅, ובחפיפה אני שואל מה לעשות.';
+function releaseNotes_() {
+  if (prop('VERSION_SEEN') === VERSION) return;
+  P.setProperty('VERSION_SEEN', VERSION); // set first: never send twice
+  send(RELEASE_NOTES);
+}
+
 function tick() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return;
   try {
+    try { releaseNotes_(); } catch (e) { log('release notes', String(e)); }
     alerts();
     retryInbox();
     morning();
