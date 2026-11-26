@@ -145,7 +145,7 @@ function handle(row, live) {
   const p = parse(text, new Date(time), prev);
   if (!p) return busy();
   t.getRange(row, 4).setValue('done');
-  if (p.intent === 'list') { P.deleteProperty('PENDING'); return send(listText(7)); }
+  if (p.intent === 'list') { P.deleteProperty('PENDING'); return send(queryText(p)); }
   // a reply to an alert or to a "⏰" confirmation, or the answer to "🕐 שעה אחרת" = new time for that reminder
   const ask = JSON.parse(prop('SNOOZE_ASK') || 'null');
   const target = (replyTo && prop('m_' + replyTo)) || (ask && !p.text && new Date(time).getTime() - ask.at < 10 * 60000 ? ask.k : ''); // a full new reminder is not an answer
@@ -183,8 +183,10 @@ Answer JSON only:
  "text": Hebrew description of what to remind, without the time words, or null if missing,
  "when": "YYYY-MM-DD HH:MM" local time or null,
  "repeat": null|"daily"|"weekly"|"monthly"|"workdays",
+ "from", "to": for intent "list" only, "YYYY-MM-DD" first and last day asked about (one day: same date), else null,
+ "search": for intent "list" only, when he asks about a topic: array of short Hebrew keywords and synonyms that may appear in the title (e.g. ["שכירות","שכר דירה","שכ\"ד"]), else null,
  "question": short Hebrew question asking only for what is missing (what, or when), else null}
-"list" = the user asks what reminders he has. A request to postpone to a time (like "תדחה ל17:10", "דחה למחר ב-9", "בעוד 20 דקות") is intent "reminder" with that "when" and text null.
+"list" = the user asks about his existing reminders: what he has, on a date or in a range ("תזכורות ב-15.12", "מה יש לי השבוע"), or whether a reminder about something already exists ("יש כבר תזכורת על שכירות?"). A question is never a new reminder. A request to postpone to a time (like "תדחה ל17:10", "דחה למחר ב-9", "בעוד 20 דקות") is intent "reminder" with that "when" and text null.
 A message that is only a time (like "ב-17:30") is intent "reminder" with text null.
 You only read the message. You cannot save or do anything, so the question must never say that something was saved or done.
 ${prev ? `The user is answering my question about his earlier message. Combine both into one reminder.
@@ -332,6 +334,27 @@ function command(text) {
     return send('הבנתי, אתה ב-' + z + '. תזכורות חדשות יפורשו לפי השעון שם. תזכורות קיימות לא זזות.');
   }
   return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\n/klinka שעות קליניקה בחודש שעבר (או: "קליניקה עדי 10.26")\n"כרטיסייה עדי" / "עדי קנתה כרטיסייה 20.11" / "כרטיסיות"\n/retorno דוחות רטורנו לחודש שעבר (או: "רטורנו 11.26")\n/tz אזור זמן בחו״ל\nדחייה לשעה אחרת: כפתור 🕐 שעה אחרת, או תשובה (reply) להתראה או לאישור עם "תדחה ל-17:10"');
+}
+
+// answer to "what do I have on 15.12" / "is there a reminder about rent": date range and/or title keywords, series included
+function queryText(p) {
+  const tz = userTz(), day = s => Utilities.parseDate(String(s) + ' 00:00', tz, 'yyyy-MM-dd HH:mm');
+  const words = (Array.isArray(p.search) ? p.search : []).map(w => String(w).trim()).filter(String);
+  if (!p.from && !words.length) return listText(7);
+  let from = p.from ? day(p.from) : new Date(Date.now() - 864e5);
+  let to = p.from ? new Date(day(p.to || p.from).getTime() + 864e5) : new Date(Date.now() + 400 * 864e5);
+  if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) return 'לא הבנתי את התאריכים. תנסח שוב?';
+  if (to - from > 400 * 864e5) to = new Date(from.getTime() + 400 * 864e5);
+  const seen = {};
+  const evs = cal_().getEvents(from, to).filter(e => !e.isAllDayEvent())
+    .filter(e => !words.length || words.some(w => e.getTitle().includes(w)))
+    .filter(e => p.from || !e.isRecurringEvent() || (!seen[e.getId()] && (seen[e.getId()] = 1))); // a search shows a series once
+  const dm = s => Utilities.formatDate(day(s), tz, 'd.M.yy');
+  const where = (words.length ? ' על "' + words.join('" / "') + '"' : '') +
+    (p.from ? ' ב-' + dm(p.from) + (p.to && p.to !== p.from ? '–' + dm(p.to) : '') : ' בשנה הקרובה');
+  if (!evs.length) return '🔍 אין תזכורות' + where + '.';
+  const lines = evs.slice(0, 30).map(e => (e.getTag('state') === 'done' ? '✅ ' : '• ') + fmt(e.getStartTime()) + '  ' + e.getTitle() + (e.isRecurringEvent() ? ' 🔁' : ''));
+  return '🔍 תזכורות' + where + ':\n' + lines.join('\n') + (evs.length > 30 ? '\nועוד ' + (evs.length - 30) + '…' : '');
 }
 
 function listText(days) {
