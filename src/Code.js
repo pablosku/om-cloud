@@ -12,6 +12,7 @@ const HOME_TZ = 'Asia/Jerusalem';
 const DAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 const REP = { daily: 'כל יום', weekly: 'כל שבוע', monthly: 'כל חודש', workdays: 'א׳–ה׳' };
 const INBOX_H = ['time', 'msg_id', 'text', 'status', 'tries'];
+const VOICE = '🎤voice:'; // inbox text of a voice message not transcribed yet: VOICE + file_id|mime
 const userTz = () => prop('USER_TZ') || HOME_TZ;
 const models = () => (prop('GEMINI_MODELS') || 'gemini-flash-lite-latest,gemini-flash-latest').split(',').map(s => s.trim()).filter(String);
 const out_ = s => ContentService.createTextOutput(s);
@@ -86,8 +87,15 @@ function doPost(e) {
 function onMessage(m) {
   if (String(m.from.id) !== prop('ALLOWED_USER_ID')) return;
   if (m.document) return printAdd(m); // Print.gs
+  const a = m.voice || m.audio;
+  if (a) {
+    if (a.file_size > 19e6) return send('ההקלטה ארוכה מדי. אפשר עד כ-20MB, או לשלוח טקסט.');
+    tg('sendChatAction', { chat_id: m.chat.id, action: 'typing' });
+    const row = inboxAdd(new Date(m.date * 1000), m.message_id, VOICE + a.file_id + '|' + (a.mime_type || 'audio/ogg'), m.reply_to_message ? m.reply_to_message.message_id : '');
+    return handle(row, true); // transcribed in handle(), so a busy Gemini is retried by tick() like text
+  }
   const text = (m.text || '').trim();
-  if (!text) return send('כרגע אני מבין רק טקסט ו-PDF להדפסה.');
+  if (!text) return send('כרגע אני מבין טקסט, הודעות קוליות ו-PDF להדפסה.');
   if (text.startsWith('/')) return command(text);
   if (/כרטיסי{1,2}ה|כרטיסיות/.test(text)) return cardCmd(text); // Reports.gs
   if (KLINKA_RE.test(text)) return klinkaCmd(text); // Reports.gs
@@ -109,19 +117,33 @@ function inboxAdd(time, msgId, text, replyTo) {
 
 function handle(row, live) {
   const t = tab_('inbox', INBOX_H.concat('reply_to'));
-  const [time, , text, , tries, replyTo] = t.getRange(row, 1, 1, 6).getValues()[0];
+  const [time, , raw, , tries, replyTo] = t.getRange(row, 1, 1, 6).getValues()[0];
   t.getRange(row, 5).setValue(Number(tries || 0) + 1);
+  const busy = () => {
+    t.getRange(row, 4).setValue('new');
+    P.setProperty('INBOX_PENDING', '1');
+    if (live) send('קיבלתי ✍️ גוגל עמוס כרגע, אפענח בדקות הקרובות.');
+    if (Number(tries) + 1 >= 20) { t.getRange(row, 4).setValue('failed'); send('לא הצלחתי לפענח: "' + (voice ? 'הודעה קולית' : text) + '". תנסח שוב?'); }
+  };
+  const voice = String(raw).startsWith(VOICE);
+  let text = raw;
+  if (voice) {
+    const tr = transcribe_(String(raw).slice(VOICE.length));
+    if (tr === null) return busy();
+    if (!tr) { t.getRange(row, 4).setValue('done'); return send('🎤 לא שמעתי מילים בהקלטה. תנסה שוב?'); }
+    text = tr;
+    t.getRange(row, 3).setValue('🎤 ' + tr); // the inbox keeps what was understood
+    send('🎤 שמעתי: ' + tr);
+    // a spoken report request goes where the typed one goes
+    if (/כרטיסי{1,2}ה|כרטיסיות/.test(tr)) { t.getRange(row, 4).setValue('done'); return cardCmd(tr); } // Reports.gs
+    if (KLINKA_RE.test(tr)) { t.getRange(row, 4).setValue('done'); return klinkaCmd(tr); }
+    if (RETORNO_RE.test(tr)) { t.getRange(row, 4).setValue('done'); return retornoCmd(tr); }
+  }
   // a follow-up to my question: read it together with the earlier message (kept for 30 min)
   const pend = JSON.parse(prop('PENDING') || 'null');
   const prev = pend && new Date(time).getTime() - pend.at < 30 * 60000 && pend.row !== row ? pend.text : '';
   const p = parse(text, new Date(time), prev);
-  if (!p) {
-    t.getRange(row, 4).setValue('new');
-    P.setProperty('INBOX_PENDING', '1');
-    if (live) send('קיבלתי ✍️ גוגל עמוס כרגע, אפענח בדקות הקרובות.');
-    if (Number(tries) + 1 >= 20) { t.getRange(row, 4).setValue('failed'); send('לא הצלחתי לפענח: "' + text + '". תנסח שוב?'); }
-    return;
-  }
+  if (!p) return busy();
   t.getRange(row, 4).setValue('done');
   if (p.intent === 'list') { P.deleteProperty('PENDING'); return send(listText(7)); }
   const target = replyTo && prop('m_' + replyTo); // a reply to an alert = new time for that reminder
@@ -162,7 +184,25 @@ ${prev ? `The user is answering my question about his earlier message. Combine b
 If the follow-up is a new, complete request on its own, ignore the earlier message.
 Earlier message: ${prev}
 Follow-up message: ${text}` : `Message: ${text}`}`;
-  const body = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }],
+  return gemini_([{ text: prompt }]);
+}
+
+// Hebrew voice message -> text. null = try again later (Gemini or Telegram busy), '' = no speech
+function transcribe_(ref) {
+  const [fileId, mime] = ref.split('|');
+  const f = tg('getFile', { file_id: fileId });
+  if (!f.ok) return null;
+  let audio;
+  try { audio = UrlFetchApp.fetch('https://api.telegram.org/file/bot' + prop('TG_TOKEN') + '/' + f.result.file_path).getBlob().getBytes(); }
+  catch (e) { log('voice download', String(e)); return null; }
+  const r = gemini_([{ inline_data: { mime_type: mime || 'audio/ogg', data: Utilities.base64Encode(audio) } },
+    { text: 'Transcribe this voice message word for word. It is usually Hebrew. Do not translate, summarize or add anything. Answer JSON only: {"text": "<the transcript>"}, or {"text": ""} if there is no speech.' }]);
+  return r ? String(r.text || '').trim() : null;
+}
+
+// one Gemini call that answers JSON, trying each model in GEMINI_MODELS; null = all busy
+function gemini_(parts) {
+  const body = JSON.stringify({ contents: [{ parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0 } });
   for (const model of models()) {
     for (let i = 0; i < 2; i++) {
