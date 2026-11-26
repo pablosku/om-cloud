@@ -139,11 +139,19 @@ function handle(row, live) {
     if (KLINKA_RE.test(tr)) { t.getRange(row, 4).setValue('done'); return klinkaCmd(tr); }
     if (RETORNO_RE.test(tr)) { t.getRange(row, 4).setValue('done'); return retornoCmd(tr); }
   }
+  // a reply to an email / file summary = another question about it (Mail.gs)
+  if (mailFollowUp(replyTo, text)) { t.getRange(row, 4).setValue('done'); return; }
   // clinic calendar: add / delete / move / show a booking (Clinic.gs). false = not about the clinic, go on as a reminder
   const kp = JSON.parse(prop('CLINIC_PENDING') || 'null');
   const kprev = kp && new Date(time).getTime() - kp.at < 30 * 60000 ? kp.text : '';
   if (CLINIC_RE.test(text) || kprev) {
     const r = clinicHandle(text, new Date(time), kprev);
+    if (r === null) return busy();
+    if (r) { t.getRange(row, 4).setValue('done'); return; }
+  }
+  // find an email or a document / ask about one (Mail.gs). false = not a search, go on as a reminder
+  if (MAIL_RE.test(text)) {
+    const r = mailHandle(text, new Date(time));
     if (r === null) return busy();
     if (r) { t.getRange(row, 4).setValue('done'); return; }
   }
@@ -293,6 +301,7 @@ function onButton(q) {
   if (act === 'pc' || act === 'pr') return printButton(q, act, k); // Print.gs
   if (act === 'rt') return retornoButton(q, k); // Reports.gs
   if (act === 'kc') return clinicButton(q, k, arg); // Clinic.gs
+  if (act === 'ml' || act === 'mp') return mailButton(q, act, k, arg); // Mail.gs
   const o = unkey_(k);
   if (!o) return finish('לא מצאתי, אולי כבר טופלה');
   if (act === 'x') {
@@ -342,7 +351,7 @@ function command(text) {
     P.setProperty('USER_TZ', z);
     return send('הבנתי, אתה ב-' + z + '. תזכורות חדשות יפורשו לפי השעון שם. תזכורות קיימות לא זזות.');
   }
-  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\nיומן קליניקה: "תוסיף טיפול לעדי ביום שלישי ב-11", "תמחק טיפול של עדי ביום שלישי", "תזיז טיפול של עדי ביום שלישי ל-12", "מה יש בקליניקה מחר" (תמיד מאשר איתך לפני שינוי)\n/klinka שעות קליניקה בחודש שעבר (או: "קליניקה עדי 10.26")\n"כרטיסייה עדי" / "עדי קנתה כרטיסייה 20.11" / "כרטיסיות"\n/retorno דוחות רטורנו לחודש שעבר (או: "רטורנו 11.26")\n/tz אזור זמן בחו״ל\nדחייה לשעה אחרת: כפתור 🕐 שעה אחרת, או תשובה (reply) להתראה או לאישור עם "תדחה ל-17:10"');
+  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\nיומן קליניקה: "תוסיף טיפול לעדי ביום שלישי ב-11", "תמחק טיפול של עדי ביום שלישי", "תזיז טיפול של עדי ביום שלישי ל-12", "מה יש בקליניקה מחר" (תמיד מאשר איתך לפני שינוי)\n/klinka שעות קליניקה בחודש שעבר (או: "קליניקה עדי 10.26")\n"כרטיסייה עדי" / "עדי קנתה כרטיסייה 20.11" / "כרטיסיות"\n/retorno דוחות רטורנו לחודש שעבר (או: "רטורנו 11.26")\n/tz אזור זמן בחו״ל\nמייל ומסמכים: "מתי הגיעה החשבונית מחברת החשמל?", "תמצא לי את פוליסת הביטוח" (רק קורא, לא שולח ולא מוחק)\nדחייה לשעה אחרת: כפתור 🕐 שעה אחרת, או תשובה (reply) להתראה או לאישור עם "תדחה ל-17:10"');
 }
 
 // answer to "what do I have on 15.12" / "is there a reminder about rent": date range and/or title keywords, series included
@@ -457,7 +466,7 @@ function morning() {
   Object.keys(all).forEach(key => {
     if (key.startsWith('k_')) { try { if (JSON.parse(all[key]).c < old) P.deleteProperty(key); } catch (e) {} }
   });
-  Object.keys(all).filter(key => key.startsWith('m_') && !all['k_' + all[key]]).forEach(key => P.deleteProperty(key));
+  Object.keys(all).filter(key => (key.startsWith('m_') || key.startsWith('mm_')) && !all['k_' + all[key]]).forEach(key => P.deleteProperty(key));
 }
 
 // ---------- setup (run once by hand) ----------
