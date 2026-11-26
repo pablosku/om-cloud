@@ -171,6 +171,7 @@ function handle(row, live) {
   const prev = pend && new Date(time).getTime() - pend.at < 30 * 60000 && pend.row !== row ? pend.text : '';
   const p = parse(text, new Date(time), replyKey || askKey ? '' : prev); // an answer about a reminder is not a follow-up
   if (!p) return busy();
+  fixParse_(text, new Date(time), p);
   t.getRange(row, 4).setValue('done');
   if (p.intent === 'list') { P.deleteProperty('PENDING'); return send(queryText(p)); }
   // a reply to an alert or to a "⏰" confirmation, or the answer to "🕐 שעה אחרת" = new time for that reminder
@@ -219,6 +220,31 @@ function quickWhen_(text, now) {
   return when;
 }
 
+// two Gemini slips, fixed after parse():
+// 1. "תזכיר לי ב15 ..." read as the 15th of the month at 09:00 -> 15:00 today (or tomorrow if it passed)
+// 2. a prefix letter cut off the first word of the text ("לקנות חלב" -> "קנות חלב") -> put back as written
+function fixParse_(text, at, p) {
+  if (!p || p.intent !== 'reminder') return p;
+  const s = String(text || '');
+  const m = s.match(/(?:^|\s)ב\s*-?\s*(\d{1,2})(?![\d.\/:])/);
+  const hasDate = /\d{1,2}\s*[.\/]\s*\d{1,2}|ינואר|פברואר|מרץ|מרס|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר|לחודש|בחודש/.test(s);
+  const d = String(p.when || '').match(/^(\d{4}-\d\d-(\d\d)) (\d\d:\d\d)$/);
+  if (m && !hasDate && d && Number(d[2]) === Number(m[1]) && d[3] === '09:00') {
+    const tz = userTz(), near = [0, 1].map(o => Utilities.formatDate(new Date(at.getTime() + o * 864e5), tz, 'yyyy-MM-dd'));
+    const q = near.indexOf(d[1]) < 0 && quickWhen_((/מחר/.test(s) ? 'מחר ' : '') + 'ב' + m[1], at);
+    if (q) { log('fixParse hour', s.slice(0, 100), p.when, '->', q); p.when = q; }
+  }
+  if (p.text) {
+    const words = s.split(/[\s,.!?:;"״]+/).filter(String);
+    const parts = String(p.text).split(/(\s+)/), first = parts[0];
+    if (first && words.indexOf(first) < 0) {
+      const full = words.find(w => w.length === first.length + 1 && 'לבהוש'.indexOf(w[0]) >= 0 && w.slice(1) === first);
+      if (full) { parts[0] = full; p.text = parts.join(''); log('fixParse prefix', first, '->', full); }
+    }
+  }
+  return p;
+}
+
 // ---------- brain ----------
 function parse(text, at, prev) {
   const tz = userTz();
@@ -227,13 +253,11 @@ function parse(text, at, prev) {
 Week starts Sunday. "workdays" = Sunday to Thursday. "ביום רביעי הבא" = the next Wednesday after today.
 Defaults: בבוקר=09:00, בצהריים=13:00, אחה"צ=16:00, בערב=19:00, בלילה=22:00, a date without a time=09:00.
 A bare hour without בבוקר/בערב: 7-12 = morning (ב8 = 08:00), 1-6 = afternoon (ב3 = 15:00).
-A bare number after ב / ב- / ל / ל- with no month is an HOUR, never a day of the month: "ב15" = 15:00, "ב-9" = 09:00, "ב 20" = 20:00.
-A date always has a month ("15.12", "15/12", "ב-15 בדצמבר") or the word "לחודש".
+A bare number after ב (ב15, ב-15, ב 15) is always an hour (ב15 = 15:00), never a day of the month. A date needs a month (15.12, 15/12, 15 בדצמבר) or the word לחודש.
+The text keeps the user's words exactly as written, prefix letters included ("לקנות חלב" stays "לקנות חלב", never "קנות חלב").
 A time of day that already passed today, without a date, means tomorrow.
 The message may have several lines (voice typing). Usually the first line says when, and the next lines are what to remind.
 Keep the full content of those lines as the text, even when it is a long list or looks odd. Never drop content.
-In "text" copy the user's words exactly as written: never remove or change letters at the start of a word.
-A ל or ב that belongs to a word stays ("לקנות חלב" stays "לקנות חלב", never "קנות חלב"); remove only the time words themselves.
 Answer JSON only:
 {"intent":"reminder"|"list"|"other",
  "text": Hebrew description of what to remind, without the time words, or null if missing,
