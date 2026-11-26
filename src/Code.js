@@ -312,12 +312,10 @@ function command(text) {
 
 // ---------- every minute ----------
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
-const VERSION = '20';
-const RELEASE_NOTES = '🆕 גרסה 20 עלתה. מה חדש:\n\n' +
-  '1. רשימת קניות בקיפ: "תוסיף לקניות חלב, ביצים ולחם" (גם בקול). המחשב בבית מוסיף לרשימה "לקנות", ופריט שכבר ברשימה לא נוסף שוב. אם המחשב כבוי, הפריטים מחכים לו.\n' +
-  '2. חשבון מי מודיעין: לפני הדפסה אני שואל, עם כפתור 🖨️ הדפס.\n' +
-  '3. /bills נמצא עכשיו בתפריט הפקודות.\n' +
-  '4. סידור פנימי: קוד התזכורות עבר לקובץ משלו (בלי שינוי בהתנהגות).';
+const VERSION = '21';
+const RELEASE_NOTES = '🆕 גרסה 21 עלתה. מה חדש:\n\n' +
+  '1. רשימת קניות: המילה "קניות" כבר לא נכנסת לשם הפריט ("קניות חלב" נשמר כ"חלב").\n' +
+  '2. המחשב בבית: שמירה יציבה יותר כש-OneDrive תופס את הקובץ לרגע.';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },
