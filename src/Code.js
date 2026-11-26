@@ -139,6 +139,17 @@ function handle(row, live) {
     if (KLINKA_RE.test(tr)) { t.getRange(row, 4).setValue('done'); return klinkaCmd(tr); }
     if (RETORNO_RE.test(tr)) { t.getRange(row, 4).setValue('done'); return retornoCmd(tr); }
   }
+  // a reply to an alert / "⏰" confirmation / "🕐 שעה אחרת" question = new time for that reminder.
+  // A plain time ("13:15", "היום 13:15", "מחר ב-9", "בעוד 20 דקות") is read here, without Gemini.
+  const ask = JSON.parse(prop('SNOOZE_ASK') || 'null');
+  const replyKey = (replyTo && prop('m_' + replyTo)) || '';
+  const askKey = ask && new Date(time).getTime() - ask.at < 10 * 60000 ? ask.k : '';
+  const quick = (replyKey || askKey) && quickWhen_(text);
+  if (quick) {
+    t.getRange(row, 4).setValue('done');
+    P.deleteProperty('SNOOZE_ASK'); P.deleteProperty('PENDING');
+    return moveTo(replyKey || askKey, quick);
+  }
   // a reply to an email / file summary = another question about it (Mail.gs)
   if (mailFollowUp(replyTo, text)) { t.getRange(row, 4).setValue('done'); return; }
   // clinic calendar: add / delete / move / show a booking (Clinic.gs). false = not about the clinic, go on as a reminder
@@ -158,17 +169,18 @@ function handle(row, live) {
   // a follow-up to my question: read it together with the earlier message (kept for 30 min)
   const pend = JSON.parse(prop('PENDING') || 'null');
   const prev = pend && new Date(time).getTime() - pend.at < 30 * 60000 && pend.row !== row ? pend.text : '';
-  const p = parse(text, new Date(time), prev);
+  const p = parse(text, new Date(time), replyKey || askKey ? '' : prev); // an answer about a reminder is not a follow-up
   if (!p) return busy();
   t.getRange(row, 4).setValue('done');
   if (p.intent === 'list') { P.deleteProperty('PENDING'); return send(queryText(p)); }
   // a reply to an alert or to a "⏰" confirmation, or the answer to "🕐 שעה אחרת" = new time for that reminder
-  const ask = JSON.parse(prop('SNOOZE_ASK') || 'null');
-  const target = (replyTo && prop('m_' + replyTo)) || (ask && !p.text && new Date(time).getTime() - ask.at < 10 * 60000 ? ask.k : ''); // a full new reminder is not an answer
+  const target = replyKey || (!p.text ? askKey : ''); // a full new reminder is not an answer
   if (target) {
-    P.deleteProperty('SNOOZE_ASK');
-    if (p.when) { P.deleteProperty('PENDING'); return moveTo(target, p.when); }
-    if (replyTo && prop('m_' + replyTo)) return send('❓ לא דחיתי. לאיזו שעה? למשל: 17:10, מחר ב-9, בעוד 20 דקות');
+    if (p.when) { P.deleteProperty('SNOOZE_ASK'); P.deleteProperty('PENDING'); return moveTo(target, p.when); }
+    // not understood: keep waiting for the time (SNOOZE_ASK stays), so the next message still moves this reminder
+    P.setProperty('SNOOZE_ASK', JSON.stringify({ k: target, at: Date.now() }));
+    log('snooze not understood', String(text).slice(0, 100), p);
+    return send('❓ לא דחיתי. לאיזו שעה? למשל: 17:10, מחר ב-9, בעוד 20 דקות');
   }
   // multi-line message: line 1 = when, the rest = what (also when Gemini lost the text)
   const lines = String(text).split(/\n+/).map(s => s.trim()).filter(String);
@@ -181,6 +193,30 @@ function handle(row, live) {
   P.deleteProperty('PENDING');
   try { create(p); }
   catch (e) { log('create error', String(e && e.stack || e)); send('⚠️ לא הצלחתי לשמור ביומן: "' + p.text + '". תשלח שוב?'); }
+}
+
+// a plain time -> 'yyyy-MM-dd HH:mm' (user time zone), or '' when it is not just a time.
+// "13:15", "ב-13:15", "היום 13:15", "מחר ב-9", "ל-17:10", "תדחה ל17:10", "בעוד 20 דקות", "בעוד שעה", "בעוד חצי שעה", "בעוד שעתיים"
+function quickWhen_(text, now) {
+  now = now || new Date();
+  const tz = userTz();
+  const s = String(text || '').trim().replace(/[.!?]+$/, '').replace(/^(תדחה|דחה|תזיז|הזז|תעביר)\s*/, '').trim();
+  let m = s.match(/^בעוד\s*(חצי שעה|שעתיים|שעה|רבע שעה|(\d{1,3})\s*(דקות|דק׳|דק'|דק|שעות|שעה))$/);
+  if (m) {
+    const min = { 'חצי שעה': 30, 'שעתיים': 120, 'שעה': 60, 'רבע שעה': 15 }[m[1]] || Number(m[2]) * (/^ש/.test(m[3]) ? 60 : 1);
+    return Utilities.formatDate(new Date(Math.ceil((now.getTime() + min * 60000) / 60000) * 60000), tz, 'yyyy-MM-dd HH:mm');
+  }
+  m = s.match(/^(?:(היום|מחר)\s*)?(?:ב|ל)?\s*-?\s*(\d{1,2})(?:[:.](\d{2}))?\s*(היום|מחר)?$/);
+  if (!m) return '';
+  let h = Number(m[2]);
+  const min = Number(m[3] || 0), dayWord = m[1] || m[4] || '';
+  if (h > 23 || min > 59) return '';
+  if (!m[3] && h >= 1 && h <= 6) h += 12; // a bare "ב-3" = 15:00, as in parse()
+  const day = off => Utilities.formatDate(new Date(now.getTime() + off * 864e5), tz, 'yyyy-MM-dd');
+  const hm = String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+  let when = (dayWord === 'מחר' ? day(1) : day(0)) + ' ' + hm;
+  if (!dayWord && Utilities.parseDate(when, tz, 'yyyy-MM-dd HH:mm').getTime() <= now.getTime()) when = day(1) + ' ' + hm; // passed today = tomorrow
+  return when;
 }
 
 // ---------- brain ----------
@@ -385,13 +421,10 @@ function listText(days) {
 
 // ---------- every minute ----------
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
-const VERSION = '16';
-const RELEASE_NOTES = '🆕 גרסה 16 עלתה. מה חדש:\n\n' +
-  '1. חיפוש במייל ובדרייב בשאלה חופשית, בטקסט או בקול: "מתי הגיעה החשבונית מחברת החשמל?", "תמצא לי את פוליסת הביטוח". התוצאות עם כפתורי מספר.\n' +
-  '2. לחיצה על תוצאה: הקבצים המצורפים, תקציר ותשובה לשאלה.\n' +
-  '3. reply לתקציר = שאלה נוספת על אותו מייל או קובץ.\n' +
-  '4. כפתור 🖨️ ליד כל PDF שולח אותו לתור ההדפסה.\n\n' +
-  'אני רק קורא מייל: לא שולח, לא מוחק ולא מסמן.';
+const VERSION = '17';
+const RELEASE_NOTES = '🆕 גרסה 17 עלתה. מה חדש:\n\n' +
+  '1. תיקון דחייה לשעה אחרת: תשובה עם שעה בלבד ("13:15", "היום 13:15", "מחר ב-9", "בעוד 20 דקות") דוחה מיד את התזכורת.\n' +
+  '2. אם לא הבנתי את השעה, אני ממשיך לחכות לתשובה, וההודעה הבאה עדיין תדחה את אותה תזכורת.';
 function releaseNotes_() {
   if (prop('VERSION_SEEN') === VERSION) return;
   P.setProperty('VERSION_SEEN', VERSION); // set first: never send twice
