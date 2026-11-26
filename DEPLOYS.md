@@ -5,6 +5,7 @@ Live web-app deployment: `AKfycbwtF-…BQwCyDVpIQ` (same URL every time, the Wor
 
 | OM version | Date | Apps Script version | Commit | Changes |
 |---|---|---|---|---|
+| v20 | 26.11.2026 | @21 | dad29ea | Keep shopping list (add only, via laptop gkeepapi); Mei Modiin print asks first; /bills in menu (BOT_COMMANDS); Reminders.js split; print agent v3 |
 | v19 | 26.11.2026 | @20 | d7b654b | reminders: "ב15" = hour + fixParse_; Mei Avivim via laptop fetch jobs; pdfclean keeps template images' dark parts; print agent v2 |
 | v18 | 26.11.2026 | @19 | 54cd604 | bills from email: labels OM/חשבונות -> OM/טופל, Mei Avivim -> Telegram, Mei Modiin -> print |
 | v17 | 26.11.2026 | @18 | 698af69 | snooze reply fix: quick time parsing, snooze question kept when parsing fails |
@@ -18,3 +19,4 @@ v17: the 5 file hashes matched `src/` at commit 698af69 (committed after deploy,
 TODO: `src/appsscript.json` is not in the repo yet (unchanged in v15); add it from the laptop clasp folder.
 v18/v19: Bills.js, Code.js matched src/ hashes. Print.js on the laptop = LIVE file (differs from src/Print.js) + the 2 fetchPull_ lines (hash aa4dd0e09dece25c); live Reports.js also differs from src/. TODO: copy live Print.js/Reports.js from the laptop into src/.
 Laptop: print_agent.py v2 + pdfclean.py from laptop/ at d7b654b (backups *.v18.bak in the Secretary folder).
+v20: all 8 src/*.js copied byte-for-byte from dad29ea into the clasp folder (live Print.js/Reports.js differed from src/ only in whitespace, so src/ is now the live code; the earlier Print/Reports TODO is closed). Backup of v19 files: C:\Users\ASUS\om-cloud-backup-v19. Laptop: print_agent.py v3 (backup print_agent.v2.py.bak), keep_ops.py + keep_token.py, gkeepapi 0.17.1. Rollback: clasp deploy -i <id> -V 20.
