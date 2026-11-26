@@ -3,13 +3,17 @@
 2. F12 -> Application -> Cookies -> https://accounts.google.com -> copy the value of "oauth_token" (starts with oauth2_4/).
 3. Run:  python keep_token.py   and paste it (the input is hidden). The cookie works once and only for a few minutes.
 To cancel the token later: change the Google password, or remove the device at https://myaccount.google.com/device-activity"""
-import getpass, secrets
+import getpass, re, secrets
 from pathlib import Path
 
 import gpsoauth
 
-email = input("Gmail address: ").strip()
-oauth = getpass.getpass("oauth_token (hidden): ").strip()
+email = input("Gmail address: ").strip().strip("\\/'\" ")
+if not re.fullmatch(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", email):
+    raise SystemExit(f"Not an email address: {email!r}")
+oauth = getpass.getpass("oauth_token (hidden): ").strip().strip("'\" ")
+if not oauth.startswith("oauth2_4/"):
+    raise SystemExit("The value should start with oauth2_4/ - copy the oauth_token cookie value again")
 res = gpsoauth.exchange_token(email, oauth, secrets.token_hex(8))
 token = res.get("Token", "")
 if not token.startswith("aas_et/"):
