@@ -27,7 +27,7 @@ function doGet(e) {
 
 function printPull_(q) {
   P.setProperty('LAPTOP_SEEN', String(Date.now())); // every pull is also the heartbeat
-  if (!prop('JOBS_PENDING')) return json_({ job: null });
+  if (!prop('JOBS_PENDING')) return json_({ job: null, fetch: fetchPull_() }); // Bills.gs: web requests the cloud cannot make
   const lock = LockService.getUserLock();
   if (!lock.tryLock(5000)) return json_({ job: null, busy: true });
   try {
@@ -39,7 +39,7 @@ function printPull_(q) {
       if (st === 'waiting' && i < 0) i = k; // oldest first
     }
     if (!open) P.deleteProperty('JOBS_PENDING');
-    if (i < 0) return json_({ job: null });
+    if (i < 0) return json_({ job: null, fetch: fetchPull_() });
     const r = rows[i], row = i + 1, tries = Number(r[J.tries] || 0) + 1;
     let bytes;
     try {

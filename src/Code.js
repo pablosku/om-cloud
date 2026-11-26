@@ -73,6 +73,10 @@ function fmt(d) {
 // ---------- incoming ----------
 function doPost(e) {
   if ((e.parameter || {}).s !== prop('URL_SECRET')) return out_('no');
+  if (e.parameter.action === 'fetched') { // the laptop's answers to a fetch job (Bills.gs)
+    try { return out_(fetchDone_(e.parameter.id, JSON.parse(e.postData.contents))); }
+    catch (err) { log('fetched error', String(err && err.stack || err)); return out_('error'); }
+  }
   const u = JSON.parse(e.postData.contents);
   const c = CacheService.getScriptCache();
   if (c.get('u' + u.update_id)) return out_('ok'); // Telegram resend
@@ -453,7 +457,9 @@ function listText(days) {
 const VERSION = '19';
 const RELEASE_NOTES = '🆕 גרסה 19 עלתה. מה חדש:\n\n' +
   '1. "תזכיר לי ב15 ..." = היום ב-15:00 (ולא 15 בחודש). תאריך תמיד עם חודש, למשל 15.12.\n' +
-  '2. לא נחתכות יותר אותיות מתחילת מילה בתזכורת ("לקנות" נשאר "לקנות").';
+  '2. לא נחתכות יותר אותיות מתחילת מילה בתזכורת ("לקנות" נשאר "לקנות").\n' +
+  '3. מי אביבים: האתר חוסם את השרתים של גוגל, אז המחשב בבית מוריד את החשבונית ואני שולח לך אותה כאן. אם המחשב כבוי, החשבון מחכה לו.\n' +
+  '4. הדפסה "בלי תמונות": כשכל העמוד הוא תמונה (כמו מי מודיעין), הכותרות והסמלים נשארים בשחור, ורק הרקע והצבעים נמחקים.';
 function releaseNotes_() {
   if (prop('VERSION_SEEN') === VERSION) return;
   P.setProperty('VERSION_SEEN', VERSION); // set first: never send twice
