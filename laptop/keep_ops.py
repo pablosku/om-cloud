@@ -3,7 +3,7 @@ Needs in .env:  KEEP_EMAIL=<gmail address>   KEEP_MASTER_TOKEN=<aas_et/...>   (k
 The master token gives wide access to the Google account: it stays in this .env only, never in the cloud or git.
 Imported lazily by print_agent.py, so a missing gkeepapi never stops printing.
 Test by hand:  python keep_ops.py "OM TEST" חלב "2 לחם"   (creates the list if it does not exist)"""
-import sys
+import re, sys
 
 import bot
 
@@ -29,8 +29,13 @@ def _login():
     return _keep
 
 
+def _norm(text):
+    """"חלב ", "חלב." and "חלב" are the same item."""
+    return " ".join(re.sub(r"[^\w\s]", " ", str(text)).lower().split())
+
+
 def add_items(list_name, items, create=False):
-    """Adds items to the bottom of the list. Returns {"added": [...], "dup": [...]} (dup = already there, not checked)."""
+    """Adds items to the bottom of the list. Returns {"added": [...], "dup": [...]} (dup = already open in the list, not added again)."""
     global _keep
     import gkeepapi
     try:
@@ -47,17 +52,22 @@ def add_items(list_name, items, create=False):
         lst = keep.createList(name, [])
     else:
         lst = lists[0]
-    have = {i.text.strip().lower() for i in lst.items if not i.checked}
+    have = {_norm(i.text) for i in lst.items if not i.checked}
+    done = {_norm(i.text): i for i in lst.items if i.checked}  # bought before: un-check it instead of a second copy
     added, dup = [], []
     for it in items:
         it = str(it).strip()
         if not it:
             continue
-        if it.lower() in have:
+        n = _norm(it)
+        if n in have:
             dup.append(it)
             continue
-        lst.add(it, False, gkeepapi.node.NewListItemPlacementValue.Bottom)
-        have.add(it.lower())
+        if n in done:
+            done.pop(n).checked = False
+        else:
+            lst.add(it, False, gkeepapi.node.NewListItemPlacementValue.Bottom)
+        have.add(n)
         added.append(it)
     if added:
         try:
