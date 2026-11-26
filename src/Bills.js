@@ -14,30 +14,37 @@ const BILL_EVERY_MIN = 15;
 const BILL_LOOKBACK = '14d'; // an older email is handled only if labeled by hand
 const BILL_TRIES = 3;
 
-// one row per sender. get(msg) -> { blob, caption }. print: also into the print queue. drive: also a copy in Drive.
+// one row per sender. from: one or more addresses; subject: optional words the subject must contain.
+// get(msg) -> { blob, caption }. telegram: send the PDF here. print: a print-queue caption ('' = defaults,
+// '1 בלי תמונות' = first page, no images), or false. drive: also a copy in the Drive folder "OM חשבונות".
 const BILL_RULES = [
-  { id: 'meiavivim', name: 'מי אביבים (מים)', from: 'noreply@meiavivim.co.il', get: meiAvivim_, print: false, drive: false },
+  { id: 'meiavivim', name: 'מי אביבים (מים)', from: ['noreply@meiavivim.co.il'], get: meiAvivim_,
+    telegram: true, print: false, drive: false },
+  { id: 'meimodiin', name: 'מי מודיעין (מים)', from: ['btm@mei-modiin.co.il', 'btm.mei-modiin@printernet.co.il'], subject: 'חשבון תקופתי',
+    get: attachedPdf_('💧 חשבון מים, מי מודיעין'), telegram: false, print: '1 בלי תמונות', drive: false },
 ];
 
 function billLabel_(name) {
   return GmailApp.getUserLabelByName(name) || (GmailApp.getUserLabelByName('OM') || GmailApp.createLabel('OM'), GmailApp.createLabel(name));
 }
-const billRule_ = from => BILL_RULES.find(r => String(from || '').toLowerCase().indexOf(r.from) >= 0);
+const billRule_ = m => BILL_RULES.find(r => r.from.some(a => String(m.getFrom()).toLowerCase().indexOf(a) >= 0) &&
+  (!r.subject || String(m.getSubject()).indexOf(r.subject) >= 0));
+const billQuery_ = r => 'from:(' + r.from.join(' OR ') + ')' + (r.subject ? ' subject:"' + r.subject + '"' : '');
 
 function billsTick(force) {
   if (!force && Date.now() - Number(prop('BILLS_AT') || 0) < BILL_EVERY_MIN * 60000) return;
   P.setProperty('BILLS_AT', String(Date.now()));
   const todo = billLabel_(BILL_TODO), done = billLabel_(BILL_DONE);
   // 1. label new bill emails
-  BILL_RULES.forEach(r => GmailApp.search('from:' + r.from + ' newer_than:' + BILL_LOOKBACK, 0, 20).forEach(th => {
+  BILL_RULES.forEach(r => GmailApp.search(billQuery_(r) + ' newer_than:' + BILL_LOOKBACK, 0, 20).forEach(th => {
     const names = th.getLabels().map(l => l.getName());
     if (names.indexOf(BILL_DONE) < 0 && names.indexOf(BILL_TODO) < 0) th.addLabel(todo);
   }));
   // 2. handle everything under OM/חשבונות
   let n = 0;
   todo.getThreads(0, 20).forEach(th => {
-    const msgs = th.getMessages(), msg = msgs.slice().reverse().find(m => billRule_(m.getFrom())) || msgs[msgs.length - 1];
-    const rule = billRule_(msg.getFrom()), tk = 'bill_try_' + th.getId();
+    const msgs = th.getMessages(), msg = msgs.slice().reverse().find(m => billRule_(m)) || msgs[msgs.length - 1];
+    const rule = billRule_(msg), tk = 'bill_try_' + th.getId();
     if (!rule) {
       if (!prop('bill_nr_' + th.getId())) {
         P.setProperty('bill_nr_' + th.getId(), '1');
@@ -49,9 +56,9 @@ function billsTick(force) {
     if (n++ >= 3) return; // a few per tick, the rest next time
     try {
       const b = rule.get(msg);
-      sendDoc_(b.blob, b.caption);
+      if (rule.telegram) sendDoc_(b.blob, b.caption);
       if (rule.drive) billFolder_().createFile(b.blob.copyBlob());
-      if (rule.print) mailPrint_(b.blob, 'bill:' + rule.id);
+      if (rule.print !== false) mailPrint_(b.blob, 'bill:' + rule.id, rule.print, rule.telegram ? '' : b.caption);
       th.removeLabel(todo); th.addLabel(done);
       P.deleteProperty(tk);
       log('bill done', rule.id, th.getId());
@@ -79,7 +86,8 @@ function billsCmd() {
   billsTick(true);
   const waiting = billLabel_(BILL_TODO).getThreads(0, 20).length;
   send('🧾 חשבונות ממייל (בדיקה כל ' + BILL_EVERY_MIN + ' דקות):\n' +
-    BILL_RULES.map(r => '• ' + r.name + ': PDF לטלגרם' + (r.print ? ' + הדפסה' : '') + (r.drive ? ' + שמירה בדרייב' : '')).join('\n') +
+    BILL_RULES.map(r => '• ' + r.name + ': ' + [r.telegram && 'PDF לטלגרם', r.print !== false && 'הדפסה (' + captionSummary_(r.print) + ')',
+      r.drive && 'שמירה בדרייב'].filter(Boolean).join(' + ')).join('\n') +
     '\n\nמחכים לטיפול בתווית ' + BILL_TODO + ': ' + waiting);
 }
 
@@ -114,4 +122,13 @@ function meiAvivim_(msg) {
     (info.sumToPay ? '\nלתשלום: ₪' + info.sumToPay + (info.payDate ? ' עד ' + info.payDate : '') : '') +
     (info.camut ? '\nצריכה: ' + info.camut + ' מ״ק' + (info.dayes ? ' ב-' + info.dayes + ' ימים' : '') : '');
   return { blob, caption };
+}
+
+// ---------- a bill that comes as a PDF attachment (Mei Modiin) ----------
+function attachedPdf_(title) {
+  return msg => {
+    const a = msg.getAttachments().find(x => x.getContentType() === 'application/pdf' || /\.pdf$/i.test(x.getName()));
+    if (!a) throw new Error('אין PDF מצורף במייל');
+    return { blob: a.copyBlob().setName(a.getName()), caption: title + ', ' + Utilities.formatDate(msg.getDate(), HOME_TZ, 'd.M.yy') };
+  };
 }

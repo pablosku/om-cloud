@@ -180,15 +180,16 @@ function mailButton(q, act, k, arg) {
 }
 
 // a file from an email / Drive into the print queue (Print.gs): Drive copy first, so the laptop never needs Telegram
-function mailPrint_(blob, source) {
+function mailPrint_(blob, source, caption, title) { // caption: print options, e.g. '1 בלי תמונות'; title: first line of the queue message
+  caption = caption || '';
   const id = Utilities.getUuid().slice(0, 8), name = blob.getName() || 'file.pdf';
   const stamp = Utilities.formatDate(new Date(), HOME_TZ, 'yyyy-MM-dd HHmm');
   const driveId = printFolder_().createFile(blob.copyBlob().setName(stamp + ' ' + name).setContentType('application/pdf')).getId();
   const t = jobsTab_();
-  t.appendRow([id, new Date(), name, '', 'waiting', 0, '', driveId, '', '', '', '', '', source]);
+  t.appendRow([id, new Date(), name, caption, 'waiting', 0, '', driveId, '', '', '', '', '', source]);
   P.setProperty('JOBS_PENDING', '1');
   const where = laptopOnline_() ? '💻 המחשב מחובר, יודפס בעוד פחות מדקה.' : '💤 המחשב לא מחובר כרגע. אדפיס כשיחזור ואעדכן.';
-  const r = send('🖨️ בתור להדפסה: ' + name + '\n' + captionSummary_('') + '\n' + where, [[{ text: 'בטל הדפסה', callback_data: 'pc:' + id }]]);
+  const r = send((title ? title + '\n' : '') + '🖨️ בתור להדפסה: ' + name + '\n' + captionSummary_(caption) + '\n' + where, [[{ text: 'בטל הדפסה', callback_data: 'pc:' + id }]]);
   const row = rowOf_(t, id);
   if (r.ok && row) setCell_(t, row, 'bot_msg_id', r.result.message_id);
 }
