@@ -1,11 +1,26 @@
 """Shopping list in Google Keep for the print agent (add only).
 Needs in .env:  KEEP_EMAIL=<gmail address>   KEEP_MASTER_TOKEN=<aas_et/...>   (keep_token.py writes both)
 The master token gives wide access to the Google account: it stays in this .env only, never in the cloud or git.
-Imported lazily by print_agent.py, so a missing gkeepapi never stops printing.
+Self-contained (reads its own .env). Imported lazily by print_agent.py, so a missing gkeepapi never stops printing.
 Test by hand:  python keep_ops.py "OM TEST" חלב "2 לחם"   (creates the list if it does not exist)"""
 import re, sys
+from pathlib import Path
 
-import bot
+BASE = Path(__file__).resolve().parent
+ENV_FILE = BASE / ".env"
+
+
+def load_env():
+    """Reads .env next to this file (KEY=value lines)."""
+    env = {}
+    if ENV_FILE.exists():
+        for line in ENV_FILE.read_text(encoding="utf-8-sig").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    return env
+
 
 _keep = None
 
@@ -14,8 +29,8 @@ def _login():
     global _keep
     if _keep is None:
         import gkeepapi
-        email = bot.ENV.get("KEEP_EMAIL", "").strip()
-        token = bot.ENV.get("KEEP_MASTER_TOKEN", "").strip()
+        email = load_env().get("KEEP_EMAIL", "").strip()
+        token = load_env().get("KEEP_MASTER_TOKEN", "").strip()
         if not email or not token:
             raise RuntimeError("חסר KEEP_EMAIL / KEEP_MASTER_TOKEN ב-.env במחשב")
         k = gkeepapi.Keep()
