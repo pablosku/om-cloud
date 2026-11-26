@@ -118,7 +118,7 @@ function captionSummary_(c) {
   return parts.join(' · ');
 }
 
-// ---------- buttons pc:<id> (cancel) and pr:<id> (retry), called from onButton ----------
+// ---------- buttons pc:<id> (cancel), pr:<id> (retry), pa:<id> (approve a job waiting in 'ask'), called from onButton ----------
 function printButton(q, act, id) {
   const answer = text => tg('answerCallbackQuery', { callback_query_id: q.id, text });
   const lock = LockService.getUserLock();
@@ -132,7 +132,12 @@ function printButton(q, act, id) {
       if (st === 'sent') return answer('המחשב כבר מדפיס אותו');
       if (st === 'printed') return answer('כבר הודפס');
       if (st !== 'cancelled') { setCell_(t, row, 'status', 'cancelled'); setCell_(t, row, 'done_at', new Date()); }
-      line = '❌ בוטל';
+      line = st === 'ask' ? '🚫 לא מדפיס' : '❌ בוטל';
+    } else if (act === 'pa') {
+      if (st !== 'ask') return answer(st === 'cancelled' ? 'בוטל כבר' : 'כבר בתור');
+      setCell_(t, row, 'status', 'waiting');
+      P.setProperty('JOBS_PENDING', '1');
+      line = '✅ נכנס לתור' + (laptopOnline_() ? ', יודפס בעוד פחות מדקה' : ' (יודפס כשהמחשב יחזור)');
     } else {
       if (st !== 'failed') return answer('אין מה לנסות שוב');
       setCell_(t, row, 'status', 'waiting');
@@ -235,10 +240,6 @@ function notify_(r, text, kb) {
 function printSetup() {
   printFolder_();
   jobsTab_();
-  tg('setMyCommands', { commands: [
-    { command: 'list', description: 'תזכורות קרובות' },
-    { command: 'queue', description: 'מה מחכה להדפסה' },
-    { command: 'tz', description: 'אזור זמן בחו״ל' },
-    { command: 'help', description: 'עזרה' }] });
+  tg('setMyCommands', { commands: BOT_COMMANDS });
   send('תור ההדפסה מוכן ✅ שלח לי PDF.');
 }

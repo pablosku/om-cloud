@@ -248,7 +248,7 @@ function onButton(q) {
     if (line) tg('editMessageText', { chat_id: msg.chat.id, message_id: msg.message_id, text: msg.text + '\n' + line });
     else tg('editMessageReplyMarkup', { chat_id: msg.chat.id, message_id: msg.message_id, reply_markup: { inline_keyboard: [] } });
   };
-  if (act === 'pc' || act === 'pr') return printButton(q, act, k); // Print.gs
+  if (act === 'pc' || act === 'pr' || act === 'pa') return printButton(q, act, k); // Print.gs
   if (act === 'rt') return retornoButton(q, k); // Reports.gs
   if (act === 'kc') return clinicButton(q, k, arg); // Clinic.gs
   if (act === 'ml' || act === 'mp') return mailButton(q, act, k, arg); // Mail.gs
@@ -313,9 +313,19 @@ const RELEASE_NOTES = '🆕 גרסה 19 עלתה. מה חדש:\n\n' +
   '2. לא נחתכות יותר אותיות מתחילת מילה בתזכורת ("לקנות" נשאר "לקנות").\n' +
   '3. מי אביבים: האתר חוסם את השרתים של גוגל, אז המחשב בבית מוריד את החשבונית ואני שולח לך אותה כאן. אם המחשב כבוי, החשבון מחכה לו.\n' +
   '4. הדפסה "בלי תמונות": כשכל העמוד הוא תמונה (כמו מי מודיעין), הכותרות והסמלים נשארים בשחור, ורק הרקע והצבעים נמחקים.';
+// the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
+const BOT_COMMANDS = [
+  { command: 'list', description: 'תזכורות קרובות' },
+  { command: 'queue', description: 'מה מחכה להדפסה' },
+  { command: 'bills', description: 'חשבונות ממייל' },
+  { command: 'klinka', description: 'שעות קליניקה' },
+  { command: 'retorno', description: 'דוחות רטורנו' },
+  { command: 'tz', description: 'אזור זמן בחו״ל' },
+  { command: 'help', description: 'עזרה' }];
 function releaseNotes_() {
   if (prop('VERSION_SEEN') === VERSION) return;
   P.setProperty('VERSION_SEEN', VERSION); // set first: never send twice
+  try { tg('setMyCommands', { commands: BOT_COMMANDS }); } catch (e) { log('setMyCommands', String(e)); }
   send(RELEASE_NOTES);
 }
 
@@ -379,14 +389,7 @@ function setup() {
   ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('tick').timeBased().everyMinutes(1).create();
   log('setup webhook', tg('setWebhook', { url: prop('WORKER_URL'), secret_token: prop('TG_SECRET'), allowed_updates: ['message', 'callback_query'] }));
-  tg('setMyCommands', { commands: [
-    { command: 'list', description: 'תזכורות קרובות' },
-    { command: 'queue', description: 'מה מחכה להדפסה' },
-    { command: 'klinka', description: 'שעות קליניקה' },
-    { command: 'retorno', description: 'דוחות רטורנו' },
-    { command: 'tz', description: 'אזור זמן בחו״ל' },
-    { command: 'bills', description: 'חשבונות ממייל' },
-    { command: 'help', description: 'עזרה' }] });
+  tg('setMyCommands', { commands: BOT_COMMANDS });
   P.setProperty('MORNING', Utilities.formatDate(new Date(), userTz(), 'yyyy-MM-dd')); // first summary tomorrow
   send('המזכירה בענן מוכנה ✅\nשלח לי תזכורת, למשל: "בעוד 5 דקות לבדוק את הבוט"');
 }
