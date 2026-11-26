@@ -4,8 +4,10 @@ Needs two lines in .env:  PRINT_QUEUE_URL=<web app /exec url>   PRINT_QUEUE_SECR
 Pulls and answers are GET requests: Apps Script answers with a 302, and a redirected POST turns into a GET.
 The one POST is the answer to a fetch job (web requests the cloud cannot make, e.g. Mei Avivim refuses Google's
 servers): the body is too big for a URL. doPost runs on the POST itself; the redirect only fetches its "ok".
-v3: also adds items to the Google Keep shopping list (keep jobs, see keep_ops.py)."""
-import base64, json, re, socket, sys, time, urllib.error, urllib.parse, urllib.request
+v3: also adds items to the Google Keep shopping list (keep jobs, see keep_ops.py).
+v3.2: also uploads the yoga class recording to Wix (wix jobs): runs WIX_DIR/wix_upload.js -a|-b <date> in the background,
+so printing goes on during the ~30 min upload. Optional .env line: WIX_DIR=<folder of wix_upload.js> (default ~/Downloads/ZOOM)."""
+import base64, json, os, re, shutil, socket, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime
 
 import bot  # only the helpers; bot.main() does not run on import
@@ -16,7 +18,10 @@ URL = bot.ENV.get("PRINT_QUEUE_URL", "").strip()
 SECRET = bot.ENV.get("PRINT_QUEUE_SECRET", "").strip()
 POLL = 30  # seconds between pulls when the queue is empty
 STATE = bot.BASE / "print_agent_state.json"  # ids already printed + answers not yet delivered
-VERSION = "3"
+VERSION = "3.2"
+WIX_DIR = bot.ENV.get("WIX_DIR", "").strip() or os.path.expanduser(r"~\Downloads\ZOOM")
+WIX_RUNNING = set()  # ids of wix jobs running now (one thread each)
+LOCK = threading.RLock()  # the state file is written from the wix thread too
 
 
 def load_state():
@@ -27,10 +32,22 @@ def load_state():
 
 
 def save_state(st):
+    with LOCK:
+        _save_state(st)
+
+
+def _save_state(st):
     st["printed"] = st["printed"][-500:]
     tmp = STATE.with_suffix(".tmp")
     tmp.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(STATE)
+    for i in range(10):  # OneDrive locks the file for a moment while it syncs (WinError 5 / 32)
+        try:
+            tmp.replace(STATE)
+            return
+        except PermissionError:
+            if i == 9:
+                raise
+            time.sleep(0.5)
 
 
 def get(params, timeout=90):
@@ -41,6 +58,11 @@ def get(params, timeout=90):
 
 def send_done(st, answer):
     """answer = {"id", "status": ok|fail, "msg"}. Kept in the state file until the cloud says ok."""
+    with LOCK:
+        _send_done(st, answer)
+
+
+def _send_done(st, answer):
     if answer not in st["pending"]:
         st["pending"].append(answer)
         save_state(st)
@@ -103,6 +125,42 @@ def run_keep(st, k):
     send_done(st, {"id": k["id"], "status": "ok", "msg": json.dumps(res, ensure_ascii=False), "action": "keepdone"})
 
 
+def run_wix(st, w):
+    """w = {"id", "mode": a|b, "date": YYYY-MM-DD} -> runs wix_upload.js in a thread, answers ?action=wixdone when it ends."""
+    st.setdefault("wixed", [])
+    if w["id"] in st["wixed"]:
+        log("AGENT WIX already done", w["id"], "- answering again")
+        return send_done(st, {"id": w["id"], "status": "ok", "msg": "", "action": "wixdone"})
+    if w["id"] in WIX_RUNNING:
+        return
+    WIX_RUNNING.add(w["id"])
+    threading.Thread(target=_wix_thread, args=(st, w), daemon=True).start()
+
+
+def _wix_thread(st, w):
+    try:
+        node, script = shutil.which("node"), os.path.join(WIX_DIR, "wix_upload.js")
+        if not node or not os.path.exists(script):
+            raise RuntimeError(f"node or {script} not found")
+        log(f"AGENT WIX id={w['id']} start -{w['mode']} {w['date']}")
+        r = subprocess.run([node, script, "-" + w["mode"], w["date"]], cwd=WIX_DIR, stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=2 * 3600)
+        lines = [x.strip() for x in re.split(r"[\r\n]+", r.stdout + r.stderr) if x.strip() and "%" not in x]
+        tail = " | ".join(lines[-3:])[:280]
+        log(f"AGENT WIX id={w['id']} exit={r.returncode} {tail}")
+        if r.returncode != 0:
+            raise RuntimeError(tail or f"exit {r.returncode}")
+        with LOCK:
+            st["wixed"] = (st["wixed"] + [w["id"]])[-100:]
+            save_state(st)  # before answering, so a lost answer never uploads twice
+        send_done(st, {"id": w["id"], "status": "ok", "msg": tail, "action": "wixdone"})
+    except Exception as e:
+        log("AGENT WIX failed", w["id"], e)
+        send_done(st, {"id": w["id"], "status": "fail", "msg": str(e)[:300], "action": "wixdone"})
+    finally:
+        WIX_RUNNING.discard(w["id"])
+
+
 def print_job(job):
     """Returns the note for Pablo. Raises on failure."""
     caption = job.get("caption") or ""
@@ -135,7 +193,8 @@ def main():
     errors = 0
     while True:
         try:
-            flush(st)
+            with LOCK:
+                flush(st)
             res = get({"action": "pull", "host": host, "v": VERSION})
             res = json.loads(res)
             job = res.get("job")
@@ -143,6 +202,8 @@ def main():
             if not job and res.get("fetch"):
                 run_fetch(res["fetch"])
                 continue
+            if not job and res.get("wix"):
+                run_wix(st, res["wix"])  # background: the next pull comes as usual
             if not job and res.get("keep"):
                 run_keep(st, res["keep"])
                 continue

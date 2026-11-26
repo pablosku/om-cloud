@@ -22,14 +22,16 @@ function doGet(e) {
     if (q.action === 'pull') return printPull_(q);
     if (q.action === 'done') return printDone_(q);
     if (q.action === 'keepdone') return keepDone_(q); // Keep.gs
+    if (q.action === 'wixdone') return wixDone_(q); // Wix.gs
   } catch (err) { log('doGet error', q.action, String(err && err.stack || err)); return out_('error'); }
   return out_('?');
 }
 
-// no print job: one fetch job (Bills.gs) or else one shopping-list job (Keep.gs) per pull
+// no print job: one fetch job (Bills.gs) or else one shopping-list job (Keep.gs) per pull,
+// and a Wix upload job (Wix.gs) when one waits: the laptop runs it in the background
 function idlePull_() {
   const fetch = fetchPull_();
-  return { job: null, fetch, keep: fetch ? null : keepPull_() };
+  return { job: null, fetch, keep: fetch ? null : keepPull_(), wix: wixPull_() };
 }
 
 function printPull_(q) {

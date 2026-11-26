@@ -11,6 +11,8 @@ const KEEP_H = ['id', 'time', 'items', 'status', 'tries', 'sent_at', 'done_at', 
 const KJ = {}; KEEP_H.forEach((h, i) => { KJ[h] = i; });
 const KEEP_TIMEOUT = 10 * 60000, KEEP_RETRY = 5 * 60000, KEEP_DAYS = 3, KEEP_TRIES = 5; // a failed try waits 5 min
 const KEEP_RE = /קניות|לקנות|לסופר|למכולת|רשימה/;
+// command words Gemini sometimes leaves at the start of an item ("קניות חלב" -> "חלב")
+const KEEP_CMD_RE = /^(?:(?:תוסיף|תוסיפי|הוסף|להוסיף|תכניס|תרשום)\s+)?(?:ל?רשימת\s+(?:ה)?(?:קניות|לקנות)|ל?(?:ה)?קניות|לרשימה|לקנות)\s*[:,\-–]?\s*(?=\S)/;
 const keepList_ = () => prop('KEEP_LIST') || 'לקנות';
 const keepTab_ = () => tab_('keep', KEEP_H);
 
@@ -21,10 +23,10 @@ function keepHandle(text) {
     'Is the user asking to ADD items to the shopping list? A reminder ("remind me to buy...", or any message with a time or date ' +
     'like "מחר ב-8 לקנות חלב"), a question or anything else is NOT. ' +
     'If yes, split it into separate items exactly as said, in Hebrew, one product per item, keeping a quantity or detail with its item ' +
-    '("2 חלב", "שמן זית", "לחם מלא"). Drop the command words ("תוסיף", "לרשימת קניות"). ' +
+    '("2 חלב", "שמן זית", "לחם מלא"). Drop the command words ("תוסיף", "קניות", "לקניות", "לרשימת קניות", "לרשימה"): "קניות חלב" = ["חלב"]. ' +
     'Answer JSON only: {"add": true, "items": ["..."]} or {"add": false}.' }]);
   if (r === null) return null;
-  const items = (r.add && Array.isArray(r.items) ? r.items : []).map(s => String(s).trim()).filter(String).slice(0, 30);
+  const items = (r.add && Array.isArray(r.items) ? r.items : []).map(s => String(s).replace(KEEP_CMD_RE, '').trim()).filter(String).slice(0, 30);
   if (!items.length) return false;
   const online = laptopOnline_(); // Print.gs
   const res = send('🛒 ' + items.join(', ') + '\n' + (online ? 'מוסיף לקיפ…' : 'נשמר. אוסיף לקיפ כשהמחשב בבית יידלק.'));
@@ -73,8 +75,8 @@ function keepDone_(q) {
       try { res = JSON.parse(q.msg || '{}'); } catch (e) {}
       const added = res.added || [], dup = res.dup || [];
       t.getRange(row, KJ.status + 1, 1, 5).setValues([['done', r[KJ.tries], r[KJ.sent_at], new Date(), JSON.stringify(res).slice(0, 300)]]);
-      keepEdit_(r, '✅ ב"' + keepList_() + '": ' + (added.length ? added.join(', ') : '—') +
-        (dup.length ? '\nכבר היו ברשימה: ' + dup.join(', ') : ''));
+      keepEdit_(r, added.length ? '✅ ב"' + keepList_() + '": ' + added.join(', ') + (dup.length ? '\nכבר היו ברשימה: ' + dup.join(', ') : '')
+        : '👍 כבר ברשימה: ' + (dup.join(', ') || JSON.parse(r[KJ.items]).join(', ')));
     } else { // try again on the next pull; keepPull_ gives up after KEEP_TRIES
       t.getRange(row, KJ.status + 1, 1, 5).setValues([['waiting', r[KJ.tries], new Date(), '', String(q.msg || 'שגיאה במחשב').slice(0, 300)]]); // sent_at = when it failed
       P.setProperty('KEEP_PENDING', '1');
