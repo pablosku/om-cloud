@@ -312,12 +312,9 @@ function command(text) {
 
 // ---------- every minute ----------
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
-const VERSION = '21';
-const RELEASE_NOTES = '🆕 גרסה 21 עלתה. מה חדש:\n\n' +
-  '1. רשימת קניות: המילה "קניות" כבר לא נכנסת לשם הפריט ("קניות חלב" נשמר כ"חלב").\n' +
-  '2. כשכל הפריטים כבר ברשימה: "👍 כבר ברשימה: חלב" (בלי ✅ ריק).\n' +
-  '3. המחשב בבית: שמירה יציבה יותר כש-OneDrive תופס את הקובץ לרגע.\n' +
-  '4. הקלטת יוגה ל-Wix: כשמגיע המייל מ-Google Meet שההקלטה מוכנה, המחשב בבית מעלה אותה ל-Wix ומעדכן את האתר (יום ג׳ מתחילים, יום ה׳ מתקדמים). אני מודיע כשזה מתחיל וכשזה מסתיים.';
+const VERSION = '22';
+const RELEASE_NOTES = '🆕 גרסה 22 עלתה. מה חדש:\n\n' +
+  '1. הקלטת יוגה: אחרי שהיא עולה ל-Wix בהצלחה, המייל של Google Meet עובר לאשפה ב-Gmail.';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },
