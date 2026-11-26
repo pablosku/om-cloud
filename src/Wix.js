@@ -6,6 +6,7 @@
 // (C:\Users\ASUS\Downloads\ZOOM\wix_upload.js -a|-b: Drive -> Wix upload, wait for READY, update the CMS,
 // trash last week's video in Wix and this recording in Drive), then answers ?action=wixdone.
 // The upload is ~500 MB, too big for Apps Script, so it stays on the laptop (Pablo's choice, 26.11).
+// After a good upload the Meet mail goes to the Gmail trash (Pablo, 26.11).
 // One Telegram message per class: "🎥 ..." and it is edited to ✅ / ⚠️ when the laptop is done.
 // Hooks: tick() in Code.gs calls wixTick(); printPull_ (idlePull_) in Print.gs hands out wixPull_(); doGet routes wixdone.
 
@@ -90,6 +91,7 @@ function wixDone_(q) {
     if (q.status === 'ok') {
       t.getRange(row, WJ.status + 1, 1, 5).setValues([['done', r[WJ.tries], r[WJ.sent_at], new Date(), note]]);
       wixEdit_(r, '✅ הקלטת יוגה ' + wixName_(r) + ' עלתה ל-Wix ועודכנה באתר.');
+      try { GmailApp.getThreadById(r[WJ.thread_id]).moveToTrash(); } catch (e) { log('wix trash mail', String(e)); } // Pablo: the Meet mail is not needed after a good upload (Gmail keeps it 30 days in the trash)
     } else { // try again later; wixPull_ gives up after WIX_TRIES
       t.getRange(row, WJ.status + 1, 1, 5).setValues([['waiting', r[WJ.tries], new Date(), '', note || 'שגיאה במחשב']]); // sent_at = when it failed
       P.setProperty('WIX_PENDING', '1');
