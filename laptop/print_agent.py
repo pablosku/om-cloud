@@ -1,8 +1,10 @@
 """Print agent: pulls PDFs from the cloud print queue (Office Manager Cloud) and prints them.
 Runs next to bot.py and reuses its printing code (SumatraPDF, caption rules, pdfclean).
 Needs two lines in .env:  PRINT_QUEUE_URL=<web app /exec url>   PRINT_QUEUE_SECRET=<URL_SECRET>
-Only GET requests: Apps Script answers with a 302, and a redirected POST turns into a GET."""
-import base64, json, re, socket, sys, time, urllib.parse, urllib.request
+Pulls and answers are GET requests: Apps Script answers with a 302, and a redirected POST turns into a GET.
+The one POST is the answer to a fetch job (web requests the cloud cannot make, e.g. Mei Avivim refuses Google's
+servers): the body is too big for a URL. doPost runs on the POST itself; the redirect only fetches its "ok"."""
+import base64, json, re, socket, sys, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime
 
 import bot  # only the helpers; bot.main() does not run on import
@@ -13,7 +15,7 @@ URL = bot.ENV.get("PRINT_QUEUE_URL", "").strip()
 SECRET = bot.ENV.get("PRINT_QUEUE_SECRET", "").strip()
 POLL = 30  # seconds between pulls when the queue is empty
 STATE = bot.BASE / "print_agent_state.json"  # ids already printed + answers not yet delivered
-VERSION = "1"
+VERSION = "2"
 
 
 def load_state():
@@ -58,6 +60,30 @@ def flush(st):
         save_state(st)
 
 
+def run_fetch(f):
+    """f = {"id", "reqs": [{url, method?, body?, type?}]} -> posts {"answers": [{code, b64}]} or {"error"} back."""
+    answers = []
+    try:
+        for r in f["reqs"]:
+            data = r.get("body", "").encode("utf-8") if r.get("method", "GET").upper() == "POST" else None
+            req = urllib.request.Request(r["url"], data=data, method=r.get("method", "GET").upper(),
+                                         headers={"Content-Type": r.get("type", "application/json"), "User-Agent": "Mozilla/5.0"})
+            try:
+                with urllib.request.urlopen(req, timeout=90) as res:
+                    answers.append({"code": res.status, "b64": base64.b64encode(res.read()).decode("ascii")})
+            except urllib.error.HTTPError as e:
+                answers.append({"code": e.code, "b64": ""})
+        body = {"answers": answers}
+    except Exception as e:
+        body = {"error": str(e)[:300]}
+    log(f"AGENT FETCH id={f['id']} " + (f"answers={[a['code'] for a in answers]}" if "answers" in body else f"error={body['error']}"))
+    q = urllib.parse.urlencode({"s": SECRET, "action": "fetched", "id": f["id"]})
+    req = urllib.request.Request(f"{URL}?{q}", data=json.dumps(body).encode("utf-8"), method="POST",
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=180) as r:  # if this fails, the cloud hands the job out again later
+        log("AGENT FETCH answer:", r.read().decode("utf-8")[:50])
+
+
 def print_job(job):
     """Returns the note for Pablo. Raises on failure."""
     caption = job.get("caption") or ""
@@ -92,8 +118,12 @@ def main():
         try:
             flush(st)
             res = get({"action": "pull", "host": host, "v": VERSION})
-            job = json.loads(res).get("job")
+            res = json.loads(res)
+            job = res.get("job")
             errors = 0
+            if not job and res.get("fetch"):
+                run_fetch(res["fetch"])
+                continue
             if job:
                 if job["id"] in st["printed"]:  # printed before, only the answer got lost
                     log("AGENT already printed", job["id"], "- answering again")

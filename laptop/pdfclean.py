@@ -120,6 +120,19 @@ def transform_stream(data, whiten_blocks=True, darken_white_text=True):
     return b"".join(out)
 
 
+BACKGROUND_SHARE = 0.6  # an image covering this share of the page is a template, not a picture
+DARK = 150  # template pixels darker than this (0-255 gray) stay black, the rest turns white
+
+
+def _lighten(doc, page, xref):
+    pix = fitz.Pixmap(doc, xref)
+    if pix.alpha or pix.n != 1:
+        pix = fitz.Pixmap(fitz.csGRAY, pix)
+    lut = bytes(0 if v < DARK else 255 for v in range(256))
+    pix = fitz.Pixmap(fitz.csGRAY, pix.width, pix.height, bytes(pix.samples).translate(lut), False)
+    page.replace_image(xref, pixmap=pix)
+
+
 def _form_children(doc, xref):
     obj = doc.xref_object(xref)
     m = re.search(r"/Resources\s+(\d+)\s+0\s+R", obj)
@@ -152,9 +165,18 @@ def clean_pdf(src):
         text_pages = [i for i, pg in enumerate(doc) if pg.get_text().strip()]
         if not text_pages:
             return None, False
-        # 1) images
+        # 1) images. An image that covers most of a page is usually the page template itself (headings, boxes:
+        #    Mei Modiin, arnona): keep only its dark parts in black and white instead of deleting it.
         for pg in doc:
+            area = pg.rect.width * pg.rect.height
             for img in pg.get_images(full=True):
+                rects = pg.get_image_rects(img[0])
+                if rects and max(r.width * r.height for r in rects) >= BACKGROUND_SHARE * area:
+                    try:
+                        _lighten(doc, pg, img[0])
+                        continue
+                    except Exception as e:
+                        print("lighten skipped:", e)
                 pg.delete_image(img[0])
         before = {i: doc[i].get_text() for i in text_pages}
         dst = src.with_name(src.stem + "_noimg.pdf")
