@@ -21,13 +21,20 @@ function doGet(e) {
   try {
     if (q.action === 'pull') return printPull_(q);
     if (q.action === 'done') return printDone_(q);
+    if (q.action === 'keepdone') return keepDone_(q); // Keep.gs
   } catch (err) { log('doGet error', q.action, String(err && err.stack || err)); return out_('error'); }
   return out_('?');
 }
 
+// no print job: one fetch job (Bills.gs) or else one shopping-list job (Keep.gs) per pull
+function idlePull_() {
+  const fetch = fetchPull_();
+  return { job: null, fetch, keep: fetch ? null : keepPull_() };
+}
+
 function printPull_(q) {
   P.setProperty('LAPTOP_SEEN', String(Date.now())); // every pull is also the heartbeat
-  if (!prop('JOBS_PENDING')) return json_({ job: null, fetch: fetchPull_() }); // Bills.gs: web requests the cloud cannot make
+  if (!prop('JOBS_PENDING')) return json_(idlePull_()); // Bills.gs / Keep.gs: work the cloud cannot do
   const lock = LockService.getUserLock();
   if (!lock.tryLock(5000)) return json_({ job: null, busy: true });
   try {
@@ -39,7 +46,7 @@ function printPull_(q) {
       if (st === 'waiting' && i < 0) i = k; // oldest first
     }
     if (!open) P.deleteProperty('JOBS_PENDING');
-    if (i < 0) return json_({ job: null, fetch: fetchPull_() });
+    if (i < 0) return json_(idlePull_());
     const r = rows[i], row = i + 1, tries = Number(r[J.tries] || 0) + 1;
     let bytes;
     try {
