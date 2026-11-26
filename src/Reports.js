@@ -11,8 +11,8 @@ const KLINKA_EXCLUDE = ['פבלו'];
 const KLINKA_ALIASES = { "מיכל חימוביץ'": 'מיכל', 'מיכל חימוביץ’': 'מיכל' };
 const MONTHS_HE = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
-// READ ONLY: the clinic calendar is touched in exactly one place, klinkaEvents_, which copies each event
-// into a plain object {n, s, e, allDay}. No CalendarEvent object leaves it, so nothing here can edit or delete.
+// READ ONLY here: Reports.gs reads the clinic calendar only in klinkaEvents_, which copies each event
+// into a plain object {n, s, e, allDay}. Changes to the clinic calendar live only in Clinic.gs, behind a ✅ confirmation.
 function klinkaEvents_(a, b) {
   const id = prop('KLINKA_CAL_ID') || KLINKA_CAL_DEFAULT;
   const cal = CalendarApp.getCalendarById(id);
