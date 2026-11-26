@@ -14,13 +14,14 @@ if not re.fullmatch(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", email):
 oauth = getpass.getpass("oauth_token (hidden): ").strip().strip("'\" ")
 if not oauth.startswith("oauth2_4/"):
     raise SystemExit("The value should start with oauth2_4/ - copy the oauth_token cookie value again")
-res = gpsoauth.exchange_token(email, oauth, secrets.token_hex(8))
+device_id = secrets.token_hex(8)  # the token is tied to this id: keep_ops must log in with the same one
+res = gpsoauth.exchange_token(email, oauth, device_id)
 token = res.get("Token", "")
 if not token.startswith("aas_et/"):
     raise SystemExit(f"Google did not give a token: {res.get('Error') or res}")
 env = Path(__file__).resolve().parent / ".env"
 old = env.read_text(encoding="utf-8-sig").splitlines() if env.exists() else []
-lines = [l for l in old if not l.startswith(("KEEP_EMAIL=", "KEEP_MASTER_TOKEN="))]
-lines += [f"KEEP_EMAIL={email}", f"KEEP_MASTER_TOKEN={token}"]
+lines = [l for l in old if not l.startswith(("KEEP_EMAIL=", "KEEP_MASTER_TOKEN=", "KEEP_DEVICE_ID="))]
+lines += [f"KEEP_EMAIL={email}", f"KEEP_MASTER_TOKEN={token}", f"KEEP_DEVICE_ID={device_id}"]
 env.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print("Saved to .env. Test:  python keep_ops.py \"OM TEST\" חלב")
