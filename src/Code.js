@@ -227,9 +227,13 @@ function parse(text, at, prev) {
 Week starts Sunday. "workdays" = Sunday to Thursday. "ביום רביעי הבא" = the next Wednesday after today.
 Defaults: בבוקר=09:00, בצהריים=13:00, אחה"צ=16:00, בערב=19:00, בלילה=22:00, a date without a time=09:00.
 A bare hour without בבוקר/בערב: 7-12 = morning (ב8 = 08:00), 1-6 = afternoon (ב3 = 15:00).
+A bare number after ב / ב- / ל / ל- with no month is an HOUR, never a day of the month: "ב15" = 15:00, "ב-9" = 09:00, "ב 20" = 20:00.
+A date always has a month ("15.12", "15/12", "ב-15 בדצמבר") or the word "לחודש".
 A time of day that already passed today, without a date, means tomorrow.
 The message may have several lines (voice typing). Usually the first line says when, and the next lines are what to remind.
 Keep the full content of those lines as the text, even when it is a long list or looks odd. Never drop content.
+In "text" copy the user's words exactly as written: never remove or change letters at the start of a word.
+A ל or ב that belongs to a word stays ("לקנות חלב" stays "לקנות חלב", never "קנות חלב"); remove only the time words themselves.
 Answer JSON only:
 {"intent":"reminder"|"list"|"other",
  "text": Hebrew description of what to remind, without the time words, or null if missing,
@@ -422,13 +426,10 @@ function listText(days) {
 
 // ---------- every minute ----------
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
-const VERSION = '18';
-const RELEASE_NOTES = '🆕 גרסה 18 עלתה. מה חדש:\n\n' +
-  '1. חשבונות ממייל: כשמגיע חשבון מים ממי אביבים, אני מוריד את החשבונית ושולח לך אותה כאן, עם הסכום ותאריך התשלום.\n' +
-  '2. חשבון מים ממי מודיעין נשלח אוטומטית להדפסה: עמוד ראשון בלבד, בלי תמונות. תקבל עדכון כשהודפס.\n' +
-  '3. המייל מקבל בג׳ימייל תווית OM/חשבונות, ואחרי הטיפול עובר ל-OM/טופל, כך ששום חשבון לא מטופל פעמיים ולא הולך לאיבוד.\n' +
-  '4. אפשר לשים את התווית OM/חשבונות ידנית על מייל, ואם יש לשולח כלל אטפל בו.\n' +
-  '5. /bills בודק עכשיו ומראה את הכללים.';
+const VERSION = '19';
+const RELEASE_NOTES = '🆕 גרסה 19 עלתה. מה חדש:\n\n' +
+  '1. "תזכיר לי ב15 ..." = היום ב-15:00 (ולא 15 בחודש). תאריך תמיד עם חודש, למשל 15.12.\n' +
+  '2. לא נחתכות יותר אותיות מתחילת מילה בתזכורת ("לקנות" נשאר "לקנות").';
 function releaseNotes_() {
   if (prop('VERSION_SEEN') === VERSION) return;
   P.setProperty('VERSION_SEEN', VERSION); // set first: never send twice
