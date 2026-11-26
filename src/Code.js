@@ -57,7 +57,7 @@ function send(text, kb) {
 }
 const alertKb = k => [
   [{ text: '10 דק׳', callback_data: 's:' + k + ':10' }, { text: '30 דק׳', callback_data: 's:' + k + ':30' }, { text: 'שעה', callback_data: 's:' + k + ':60' }],
-  [{ text: 'מחר', callback_data: 's:' + k + ':1440' }, { text: '✅ בוצע', callback_data: 'd:' + k }]];
+  [{ text: 'מחר', callback_data: 's:' + k + ':1440' }, { text: '🕐 שעה אחרת', callback_data: 'o:' + k }, { text: '✅ בוצע', callback_data: 'd:' + k }]];
 
 function fmt(d) {
   const tz = userTz();
@@ -146,8 +146,14 @@ function handle(row, live) {
   if (!p) return busy();
   t.getRange(row, 4).setValue('done');
   if (p.intent === 'list') { P.deleteProperty('PENDING'); return send(listText(7)); }
-  const target = replyTo && prop('m_' + replyTo); // a reply to an alert = new time for that reminder
-  if (target && p.when) { P.deleteProperty('PENDING'); return moveTo(target, p.when); }
+  // a reply to an alert or to a "⏰" confirmation, or the answer to "🕐 שעה אחרת" = new time for that reminder
+  const ask = JSON.parse(prop('SNOOZE_ASK') || 'null');
+  const target = (replyTo && prop('m_' + replyTo)) || (ask && !p.text && new Date(time).getTime() - ask.at < 10 * 60000 ? ask.k : ''); // a full new reminder is not an answer
+  if (target) {
+    P.deleteProperty('SNOOZE_ASK');
+    if (p.when) { P.deleteProperty('PENDING'); return moveTo(target, p.when); }
+    if (replyTo && prop('m_' + replyTo)) return send('❓ לא דחיתי. לאיזו שעה? למשל: 17:10, מחר ב-9, בעוד 20 דקות');
+  }
   // multi-line message: line 1 = when, the rest = what (also when Gemini lost the text)
   const lines = String(text).split(/\n+/).map(s => s.trim()).filter(String);
   if (p.when && !p.text && lines.length > 1) { p.intent = 'reminder'; p.text = lines.slice(1).join('\n'); }
@@ -178,7 +184,8 @@ Answer JSON only:
  "when": "YYYY-MM-DD HH:MM" local time or null,
  "repeat": null|"daily"|"weekly"|"monthly"|"workdays",
  "question": short Hebrew question asking only for what is missing (what, or when), else null}
-"list" = the user asks what reminders he has. A message that is only a time (like "ב-17:30") is intent "reminder" with text null.
+"list" = the user asks what reminders he has. A request to postpone to a time (like "תדחה ל17:10", "דחה למחר ב-9", "בעוד 20 דקות") is intent "reminder" with that "when" and text null.
+A message that is only a time (like "ב-17:30") is intent "reminder" with text null.
 You only read the message. You cannot save or do anything, so the question must never say that something was saved or done.
 ${prev ? `The user is answering my question about his earlier message. Combine both into one reminder.
 If the follow-up is a new, complete request on its own, ignore the earlier message.
@@ -243,7 +250,8 @@ function create(p) {
   const end = new Date(start.getTime() + 15 * 60000);
   const ev = rep ? cal_().createEventSeries(p.text, start, end, recurrence_(rep)) : cal_().createEvent(p.text, start, end);
   const k = key_({ id: ev.getId(), t: start.getTime(), s: rep ? 1 : 0 });
-  send('⏰ ' + p.text + '\n' + fmt(start) + (rep ? ' · ' + REP[rep] : ''), [[{ text: 'בטל', callback_data: 'x:' + k }]]);
+  const r = send('⏰ ' + p.text + '\n' + fmt(start) + (rep ? ' · ' + REP[rep] : ''), [[{ text: 'בטל', callback_data: 'x:' + k }]]);
+  if (r.ok) P.setProperty('m_' + r.result.message_id, k); // reply "תדחה ל..." to this message = move it
 }
 
 function findOcc_(o) {
@@ -281,6 +289,14 @@ function onButton(q) {
     else { const ev = cal_().getEventById(o.id); if (ev) ev.deleteEvent(); }
     return finish('בוטל', '❌ בוטל');
   }
+  if (act === 'o') { // ask for a time; the answer (reply, or the next message within 10 min) goes to moveTo via handle()
+    tg('answerCallbackQuery', { callback_query_id: q.id });
+    P.setProperty('SNOOZE_ASK', JSON.stringify({ k, at: Date.now() }));
+    const r = tg('sendMessage', { chat_id: msg.chat.id, text: '🕐 לאיזו שעה לדחות?\nלמשל: 17:10, מחר ב-9, בעוד 20 דקות',
+      reply_markup: { force_reply: true, input_field_placeholder: 'לאיזו שעה?' } });
+    if (r.ok) P.setProperty('m_' + r.result.message_id, k);
+    return;
+  }
   const ev = findOcc_(o);
   if (!ev) return finish('לא מצאתי, אולי כבר טופלה');
   if (act === 's') {
@@ -315,7 +331,7 @@ function command(text) {
     P.setProperty('USER_TZ', z);
     return send('הבנתי, אתה ב-' + z + '. תזכורות חדשות יפורשו לפי השעון שם. תזכורות קיימות לא זזות.');
   }
-  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\n/klinka שעות קליניקה בחודש שעבר (או: "קליניקה עדי 10.26")\n"כרטיסייה עדי" / "עדי קנתה כרטיסייה 20.11" / "כרטיסיות"\n/retorno דוחות רטורנו לחודש שעבר (או: "רטורנו 11.26")\n/tz אזור זמן בחו״ל\nתשובה (reply) להתראה עם שעה חדשה = דחייה לשעה הזו');
+  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\n/klinka שעות קליניקה בחודש שעבר (או: "קליניקה עדי 10.26")\n"כרטיסייה עדי" / "עדי קנתה כרטיסייה 20.11" / "כרטיסיות"\n/retorno דוחות רטורנו לחודש שעבר (או: "רטורנו 11.26")\n/tz אזור זמן בחו״ל\nדחייה לשעה אחרת: כפתור 🕐 שעה אחרת, או תשובה (reply) להתראה או לאישור עם "תדחה ל-17:10"');
 }
 
 function listText(days) {
