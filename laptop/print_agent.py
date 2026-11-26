@@ -16,7 +16,7 @@ URL = bot.ENV.get("PRINT_QUEUE_URL", "").strip()
 SECRET = bot.ENV.get("PRINT_QUEUE_SECRET", "").strip()
 POLL = 30  # seconds between pulls when the queue is empty
 STATE = bot.BASE / "print_agent_state.json"  # ids already printed + answers not yet delivered
-VERSION = "3"
+VERSION = "3.1"
 
 
 def load_state():
@@ -30,7 +30,14 @@ def save_state(st):
     st["printed"] = st["printed"][-500:]
     tmp = STATE.with_suffix(".tmp")
     tmp.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(STATE)
+    for i in range(10):  # OneDrive locks the file for a moment while it syncs (WinError 5 / 32)
+        try:
+            tmp.replace(STATE)
+            return
+        except PermissionError:
+            if i == 9:
+                raise
+            time.sleep(0.5)
 
 
 def get(params, timeout=90):
