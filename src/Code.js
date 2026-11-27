@@ -11,7 +11,7 @@ const P = PropertiesService.getScriptProperties();
 const prop = k => P.getProperty(k);
 const HOME_TZ = 'Asia/Jerusalem';
 const DAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
-const REP = { daily: 'כל יום', weekly: 'כל שבוע', monthly: 'כל חודש', workdays: 'א׳–ה׳' };
+const REP = { daily: 'כל יום', weekly: 'כל שבוע', monthly: 'כל חודש', yearly: 'כל שנה', workdays: 'א׳–ה׳' };
 const INBOX_H = ['time', 'msg_id', 'text', 'status', 'tries'];
 const VOICE = '🎤voice:'; // inbox text of a voice message not transcribed yet: VOICE + file_id|mime
 const userTz = () => prop('USER_TZ') || HOME_TZ;

@@ -27,12 +27,32 @@ function quickWhen_(text, now) {
   return when;
 }
 
-// two Gemini slips, fixed after parse():
+// "כל חודשיים" / "כל 3 שבועות" / "כל חצי שנה" -> {repeat, every}; null when the text has no interval
+const UNITS_ = [['יום', 'ימים', 'יומיים', 'daily'], ['שבוע', 'שבועות', 'שבועיים', 'weekly'], ['חודש', 'חודשים', 'חודשיים', 'monthly'], ['שנה', 'שנים', 'שנתיים', 'yearly']];
+function interval_(s) {
+  s = String(s || '');
+  if (/כל\s+חצי\s+שנה/.test(s)) return { repeat: 'monthly', every: 6 };
+  if (/כל\s+רבעון/.test(s)) return { repeat: 'monthly', every: 3 };
+  for (const [one, many, two, rep] of UNITS_) {
+    if (new RegExp('כל\\s+' + two + '(?![א-ת])').test(s)) return { repeat: rep, every: 2 };
+    const m = s.match(new RegExp('כל\\s+(\\d{1,2})\\s*(?:' + many + '|' + one + ')(?![א-ת])'));
+    if (m && Number(m[1]) >= 2) return { repeat: rep, every: Number(m[1]) };
+  }
+  return null;
+}
+const repLabel_ = (rep, n) => {
+  const u = UNITS_.find(x => x[3] === rep);
+  return !u || !(n > 1) ? REP[rep] : 'כל ' + (n === 2 ? u[2] : n + ' ' + u[1]);
+};
+
+// Gemini slips, fixed after parse():
 // 1. "תזכיר לי ב15 ..." read as the 15th of the month at 09:00 -> 15:00 today (or tomorrow if it passed)
 // 2. a prefix letter cut off the first word of the text ("לקנות חלב" -> "קנות חלב") -> put back as written
 function fixParse_(text, at, p) {
   if (!p || p.intent !== 'reminder') return p;
   const s = String(text || '');
+  const iv = interval_(s); // 3. "כל חודשיים" read as every month -> the interval comes from the words themselves
+  if (iv && (p.repeat !== iv.repeat || Number(p.every || 1) !== iv.every)) { log('fixParse every', s.slice(0, 100), p.repeat, p.every, '->', iv); p.repeat = iv.repeat; p.every = iv.every; }
   const m = s.match(/(?:^|\s)ב\s*-?\s*(\d{1,2})(?![\d.\/:])/);
   const hasDate = /\d{1,2}\s*[.\/]\s*\d{1,2}|ינואר|פברואר|מרץ|מרס|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר|לחודש|בחודש/.test(s);
   const d = String(p.when || '').match(/^(\d{4}-\d\d-(\d\d)) (\d\d:\d\d)$/);
@@ -68,7 +88,8 @@ Answer JSON only:
 {"intent":"reminder"|"list"|"other",
  "text": Hebrew description of what to remind, without the time words, or null if missing,
  "when": "YYYY-MM-DD HH:MM" local time or null,
- "repeat": null|"daily"|"weekly"|"monthly"|"workdays",
+ "repeat": null|"daily"|"weekly"|"monthly"|"yearly"|"workdays",
+ "every": how many days/weeks/months/years between repeats, 1 unless he says otherwise (כל יומיים=2 daily, כל שבועיים=2 weekly, כל חודשיים=2 monthly, כל 3 חודשים=3 monthly, כל חצי שנה=6 monthly, כל שנה=1 yearly),
  "from", "to": for intent "list" only, "YYYY-MM-DD" first and last day asked about (one day: same date), else null,
  "search": for intent "list" only, when he asks about a topic: array of short Hebrew keywords and synonyms that may appear in the title (e.g. ["שכירות","שכר דירה","שכ\"ד"]), else null,
  "question": short Hebrew question asking only for what is missing (what, or when), else null}
@@ -83,25 +104,25 @@ Follow-up message: ${text}` : `Message: ${text}`}`;
 }
 
 // ---------- calendar ----------
-function recurrence_(rep) {
+function recurrence_(rep, n) {
   const r = CalendarApp.newRecurrence(), W = CalendarApp.Weekday;
-  if (rep === 'daily') r.addDailyRule();
-  else if (rep === 'weekly') r.addWeeklyRule();
-  else if (rep === 'monthly') r.addMonthlyRule();
-  else r.addWeeklyRule().onlyOnWeekdays([W.SUNDAY, W.MONDAY, W.TUESDAY, W.WEDNESDAY, W.THURSDAY]);
+  if (rep === 'workdays') { r.addWeeklyRule().onlyOnWeekdays([W.SUNDAY, W.MONDAY, W.TUESDAY, W.WEDNESDAY, W.THURSDAY]); return r; }
+  const rule = rep === 'daily' ? r.addDailyRule() : rep === 'weekly' ? r.addWeeklyRule() : rep === 'monthly' ? r.addMonthlyRule() : r.addYearlyRule();
+  if (n > 1) rule.interval(n); // every 2 months etc.
   return r;
 }
 
 function create(p) {
   p.text = String(p.text).trim().replace(/\s*\n+\s*/g, ' · '); // one-line event title
   const rep = REP[p.repeat] ? p.repeat : null;
+  const every = rep && rep !== 'workdays' ? Math.min(Math.max(Math.round(Number(p.every) || 1), 1), 99) : 1;
   const start = Utilities.parseDate(p.when, rep ? HOME_TZ : userTz(), 'yyyy-MM-dd HH:mm'); // series live in Israel time
   if (isNaN(start.getTime())) return send('לא הבנתי את הזמן. תנסח שוב?');
   if (!rep && start.getTime() < Date.now() - 60000) return send(fmt(start) + ' כבר עבר. תנסח שוב?');
   const end = new Date(start.getTime() + 15 * 60000);
-  const ev = rep ? cal_().createEventSeries(p.text, start, end, recurrence_(rep)) : cal_().createEvent(p.text, start, end);
+  const ev = rep ? cal_().createEventSeries(p.text, start, end, recurrence_(rep, every)) : cal_().createEvent(p.text, start, end);
   const k = key_({ id: ev.getId(), t: start.getTime(), s: rep ? 1 : 0 });
-  const r = send('⏰ ' + p.text + '\n' + fmt(start) + (rep ? ' · ' + REP[rep] : ''), [[{ text: 'בטל', callback_data: 'x:' + k }]]);
+  const r = send('⏰ ' + p.text + '\n' + fmt(start) + (rep ? ' · ' + repLabel_(rep, every) : ''), [[{ text: 'בטל', callback_data: 'x:' + k }]]);
   if (r.ok) P.setProperty('m_' + r.result.message_id, k); // reply "תדחה ל..." to this message = move it
 }
 
