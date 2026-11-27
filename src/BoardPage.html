@@ -97,6 +97,9 @@ details.donebox[open] summary::before{content:"▾"}
 .newlist{border:1.5px dashed var(--line);border-radius:16px;min-height:120px;display:flex;align-items:center;justify-content:center;color:var(--muted);background:transparent;font-size:1rem}
 .pal{position:absolute;left:10px;bottom:6px;border:0;background:none;padding:2px 4px;font-size:15px;line-height:1;opacity:0;filter:grayscale(.4);border-radius:6px}
 .pal.trash{left:38px}
+.pal.grip{left:66px;cursor:grab;filter:none;color:var(--muted);font-size:14px;letter-spacing:-2px}
+.cal .rep{font-size:.72em;color:var(--muted);background:var(--shadow-soft);border-radius:99px;padding:0 5px;margin-inline-start:5px;vertical-align:1px}
+.note.ghost{opacity:.45}
 @media (hover:hover){.note:hover .pal,.pal:focus-visible{opacity:.85}}
 @media (hover:none){.pal{opacity:.45}}
 .cal li{min-height:32px;display:flex;gap:6px;align-items:center;-webkit-touch-callout:none}
@@ -314,14 +317,24 @@ function renderLists(){
         el('div',{className:'btns'},[btn('ביטול','ביטול',closePop,'primary keep'),btn('מחק','מחק',()=>{S.lists=S.lists.filter(l=>l!==list);send({t:'list.del',id:list.id});closePop();renderLists()},'danger')]));
       setTimeout(()=>{const k=p.querySelector('.keep');if(k)k.focus()},0)}),'pal trash');
     sec.append(db);
+    // order of notes: drag the ⠿ handle onto another note (PC), or click it for "move earlier / later"
+    const gr=btn('⋮⋮','שנה מקום',()=>openPop(gr,p=>{const k=S.lists.indexOf(list);
+      p.append(el('h3',{textContent:'מקום הפתק'}),el('div',{className:'btns'},[
+        btn('→ קודם','הזז קודם',()=>{closePop();moveNote(list,k-1)}),btn('אחר כך ←','הזז אחר כך',()=>{closePop();moveNote(list,k+1)})]))}),'pal grip');
+    if(!TOUCH){gr.draggable=true;gr.addEventListener('dragstart',e=>{drag={note:list};e.dataTransfer.setData('text/plain','');e.dataTransfer.setDragImage(sec,20,20);setTimeout(()=>sec.classList.add('ghost'),0)});
+      gr.addEventListener('dragend',()=>{sec.classList.remove('ghost');drag=null})}
+    sec.append(gr);
     sec.addEventListener('dragover',e=>{if(drag){e.preventDefault();sec.classList.add('drop')}});
     sec.addEventListener('dragleave',()=>sec.classList.remove('drop'));
     sec.addEventListener('drop',e=>{e.preventDefault();sec.classList.remove('drop');if(!drag)return;
-      if(drag.rem)remToList(drag.rem,list);else if(drag.list!==list)moveItem(drag.list,drag.item,list);drag=null});
+      if(drag.note){if(drag.note!==list)moveNote(drag.note,S.lists.indexOf(list))}else if(drag.rem)remToList(drag.rem,list);else if(drag.list!==list)moveItem(drag.list,drag.item,list);drag=null});
     root.append(sec);
   });
   root.append(btn('+ רשימה או פרויקט חדש','רשימה חדשה',()=>{const l={id:rid(),name:'פרויקט חדש',note:'',kind:'list',items:[]};S.lists.push(l);send({t:'list.add',id:l.id,name:l.name});renderLists()},'newlist'));
 }
+function moveNote(l,to){
+  const from=S.lists.indexOf(l);to=Math.max(0,Math.min(S.lists.length-1,to));if(from<0||from===to)return;
+  S.lists.splice(from,1);S.lists.splice(to,0,l);send({t:'list.order',ids:S.lists.map(x=>x.id)});renderLists()}
 function moveItem(from,i,to){from.items=from.items.filter(x=>x!==i);to.items.push(i);send({t:'item.set',id:i.id,f:{list:to.id}});renderLists()}
 function itemEl(list,i){
   const li=el('li',{className:'item'+(i.done?' done':'')+(i.wait&&!i.done?' waiting':'')});
@@ -401,7 +414,7 @@ function renderCal(){
   list.forEach(r=>{
     const dn=dayName(r.date); if(dn!==last){ul.append(el('li',{className:'day',textContent:dn}));last=dn}
     const li=el('li',{className:(dn==='היום'?'today':'')+(r.st?' gone':'')});
-    li.append(btn(r.time,'שנה מועד',e=>timePop(e.currentTarget,r),'when'),el('span',{className:'what',textContent:r.t+(r.series?' 🔁':'')}));
+    li.append(btn(r.time,'שנה מועד',e=>timePop(e.currentTarget,r),'when'),el('span',{className:'what'},[r.t,...(r.series?[el('span',{className:'rep',title:'תזכורת חוזרת',textContent:'↻'})]:[])]));
     if(r.st)li.append(el('span',{className:'st',textContent:r.st==='task'?'הועבר ל'+(r.to||'פתק'):'בוצע'}),btn('↶','החזר',()=>{r.st='';r.to='';send({t:'rem.undo',id:r.id,at:r.at});renderCal()},'ib'));
     else{
       if(dn==='היום'&&r.time<hhmm)li.append(el('span',{className:'pill',textContent:'עבר'}));

@@ -131,6 +131,12 @@ function boardDo_(op) {
       if ('note' in op) set.note = op.note || '';
       return rowSet_('board_lists', BL_H, op.id, set);
     }
+    case 'list.order': { // the whole order of the notes, as the page shows it
+      const t = tab_('board_lists', BL_H), v = t.getDataRange().getValues(), pos = {};
+      (op.ids || []).forEach((id, k) => { pos[id] = k + 1; });
+      v.forEach((r, i) => { if (i && pos[r[BL.id]] && r[BL.order] !== pos[r[BL.id]]) t.getRange(i + 1, BL.order + 1).setValue(pos[r[BL.id]]); });
+      return;
+    }
     case 'list.del': return rowSet_('board_lists', BL_H, op.id, { deleted: now });
     case 'view.set': P.setProperty('BOARD_VIEW', JSON.stringify(op.view || {})); return;
     case 'rem.done': case 'rem.undo': case 'rem.cancel': case 'rem.move': case 'rem.tolist': return boardRem_(op);
