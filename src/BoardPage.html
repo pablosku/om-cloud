@@ -98,7 +98,7 @@ details.donebox[open] summary::before{content:"▾"}
 .pal{position:absolute;left:10px;bottom:6px;border:0;background:none;padding:2px 4px;font-size:15px;line-height:1;opacity:0;filter:grayscale(.4);border-radius:6px}
 .pal.trash{left:38px}
 .pal.grip{left:66px;cursor:grab;filter:none;color:var(--muted);font-size:14px;letter-spacing:-2px}
-.cal .rep{font-size:.72em;color:var(--muted);background:var(--shadow-soft);border-radius:99px;padding:0 5px;margin-inline-start:5px;vertical-align:1px}
+.cal .rep{display:inline-block;color:var(--muted);margin-inline-start:6px;vertical-align:-1px;line-height:0}.cal .rep svg{width:.8em;height:.8em}
 .note.ghost{opacity:.45}
 @media (hover:hover){.note:hover .pal,.pal:focus-visible{opacity:.85}}
 @media (hover:none){.pal{opacity:.45}}
@@ -332,6 +332,8 @@ function renderLists(){
   });
   root.append(btn('+ רשימה או פרויקט חדש','רשימה חדשה',()=>{const l={id:rid(),name:'פרויקט חדש',note:'',kind:'list',items:[]};S.lists.push(l);send({t:'list.add',id:l.id,name:l.name});renderLists()},'newlist'));
 }
+// recurring-reminder mark: two arrows in a circle, muted, no background (Pablo picked option 4)
+function repIcon(){const sp=el('span',{className:'rep',title:'תזכורת חוזרת'});sp.innerHTML='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6.5a5.5 5.5 0 0 1 9.6-2.4M13.5 9.5a5.5 5.5 0 0 1-9.6 2.4"/><path d="M12.5 1.5v3h-3M3.5 14.5v-3h3"/></svg>';return sp}
 function moveNote(l,to){
   const from=S.lists.indexOf(l);to=Math.max(0,Math.min(S.lists.length-1,to));if(from<0||from===to)return;
   S.lists.splice(from,1);S.lists.splice(to,0,l);send({t:'list.order',ids:S.lists.map(x=>x.id)});renderLists()}
@@ -414,7 +416,7 @@ function renderCal(){
   list.forEach(r=>{
     const dn=dayName(r.date); if(dn!==last){ul.append(el('li',{className:'day',textContent:dn}));last=dn}
     const li=el('li',{className:(dn==='היום'?'today':'')+(r.st?' gone':'')});
-    li.append(btn(r.time,'שנה מועד',e=>timePop(e.currentTarget,r),'when'),el('span',{className:'what'},[r.t,...(r.series?[el('span',{className:'rep',title:'תזכורת חוזרת',textContent:'↻'})]:[])]));
+    li.append(btn(r.time,'שנה מועד',e=>timePop(e.currentTarget,r),'when'),el('span',{className:'what'},[r.t,...(r.series?[repIcon()]:[])]));
     if(r.st)li.append(el('span',{className:'st',textContent:r.st==='task'?'הועבר ל'+(r.to||'פתק'):'בוצע'}),btn('↶','החזר',()=>{r.st='';r.to='';send({t:'rem.undo',id:r.id,at:r.at});renderCal()},'ib'));
     else{
       if(dn==='היום'&&r.time<hhmm)li.append(el('span',{className:'pill',textContent:'עבר'}));

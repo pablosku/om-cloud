@@ -318,7 +318,7 @@ function command(text) {
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
 const VERSION = '25';
 const RELEASE_NOTES = '🆕 גרסה 25 עלתה. מה חדש בדף של פבלו:\n\n' +
-  '1. תזכורת חוזרת מסומנת בסמל ↻ קטן ועדין במקום האייקון הבולט.\n' +
+  '1. תזכורת חוזרת מסומנת בסמל קטן ועדין של שני חצים במקום האייקון הבולט.\n' +
   '2. אפשר לשנות את סדר הפתקים: לגרור את הידית ⋮⋮ (בפינת הפתק, כשהעכבר עליו) לפתק אחר, או ללחוץ עליה ולבחור "קודם" או "אחר כך" (גם בטלפון).';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
