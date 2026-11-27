@@ -236,18 +236,25 @@ function shopAdd_(names, store, secId) {
   });
   return res;
 }
-// doGet ?s=URL_SECRET&action=shop&f=FAMILY_KEY&op=<json> (the Worker calls it). Family ops only: read, add, tick, clear.
+// doGet ?s=URL_SECRET&action=shop&f=FAMILY_KEY&op=<json> (the Worker calls it). Family ops only: read, add, tick, move under a line, clear.
 function shopApi_(q) {
   if (!prop('FAMILY_KEY') || q.f !== prop('FAMILY_KEY')) return json_({ error: 'key' });
   const op = q.op ? JSON.parse(q.op) : { t: 'get' };
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     if (op.t === 'add') shopAdd_([String(op.text || '').slice(0, 200)], '', op.sec);
+    if (op.t === 'sec') { const cur = shopRead_(); // move an item under another line ('' = top)
+      if (cur.items.some(x => x.id === op.id) && (!op.sec || cur.seps.some(x => x.id === op.sec))) rowSet_('board_items', BI_H, op.id, { sec: op.sec || '', updated: new Date() }); }
     if (op.t === 'done' && shopRead_().items.some(x => x.id === op.id)) rowSet_('board_items', BI_H, op.id, { done: !!op.done, updated: new Date() });
     if (op.t === 'clear') { const t = boardItemsTab_(), v = t.getDataRange().getValues(), id = boardShopList_();
       v.forEach((r, i) => { if (i && String(r[BI.list]) === id && r[BI.done] === true && !r[BI.deleted]) t.getRange(i + 1, BI.deleted + 1).setValue(new Date()); }); }
   } finally { lock.releaseLock(); }
   return json_(shopRead_());
+}
+// doGet ?s=URL_SECRET&action=shoppage&f=FAMILY_KEY: the family page as plain HTML text (the Worker serves it)
+function shopPage_(q) {
+  if (!prop('FAMILY_KEY') || q.f !== prop('FAMILY_KEY')) return out_('no');
+  return ContentService.createTextOutput(HtmlService.createHtmlOutputFromFile('FamilyPage').getContent());
 }
 // the family link: the Worker's address (from the Telegram webhook) + /shop?f=FAMILY_KEY. "/family חדש" makes a new key.
 function familyLink_(fresh) {

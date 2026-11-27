@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="he" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>לקנות</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="לקנות">
+<meta name="theme-color" content="#f6e6d6">
+<link rel="apple-touch-icon" href="/shop/icon.png">
+<link id="mf" rel="manifest">
+<style>
+:root{--bg:#f6e6d6;--note:#fbf3ec;--edge:#e8d6c6;--ink:#3a2a1f;--muted:#9a8676;--line:#e3d0be;--accent:#b5541c;--done:#b3a191}
+@media (prefers-color-scheme:dark){:root{--bg:#231b16;--note:#2e241e;--edge:#43352b;--ink:#efe3d8;--muted:#a8978a;--line:#4a3b30;--accent:#e08a55;--done:#7c6d62}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Rubik,"Segoe UI",Arial,sans-serif;
+  padding:max(14px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom))}
+.note{background:var(--note);border:1px solid var(--edge);border-radius:16px;box-shadow:0 1px 2px rgba(90,50,20,.16),0 4px 14px rgba(90,50,20,.07);
+  padding:6px 16px 14px;max-width:560px;margin:0 auto}
+h1{font-weight:500;font-size:1.5rem;margin:10px 0 6px}
+ul{list-style:none;margin:0;padding:0}
+li.it{display:flex;align-items:flex-start;gap:10px;font-size:1.1rem;line-height:1.3;padding:7px 0}
+li.it input{appearance:none;-webkit-appearance:none;width:20px;height:20px;border:1.5px solid var(--muted);border-radius:4px;flex:none;margin:2px 0 0;display:grid;place-content:center;background:transparent}
+li.it input:checked{border-color:var(--accent)}
+li.it input:checked::after{content:"";width:10px;height:6px;border:2px solid var(--accent);border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+li.it.done span{text-decoration:line-through;color:var(--done)}
+li.sep{display:flex;align-items:center;gap:6px;margin:12px 0 2px;color:var(--muted);font-size:.85rem}
+li.sep::after{content:"";flex:1;border-top:1px solid var(--line)}
+form{display:flex;gap:8px;margin-top:10px}
+form input{flex:1;min-width:0;font:inherit;font-size:1.05rem;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);padding:8px 2px}
+form input:focus{outline:none;border-bottom-color:var(--accent)}
+form button{font:inherit;border:0;background:var(--accent);color:#fff;border-radius:10px;padding:6px 14px}
+.bought{margin-top:14px;color:var(--muted);font-size:.9rem;display:flex;align-items:center;gap:10px}
+.bought button{font:inherit;font-size:.85rem;border:0;background:none;color:var(--muted);text-decoration:underline;padding:4px}
+.msg{text-align:center;color:var(--muted);padding:30px 0}
+.toast{position:fixed;bottom:max(16px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:.9rem}
+.pop{position:absolute;left:24px;background:var(--note);border:1px solid var(--edge);border-radius:12px;box-shadow:0 6px 20px rgba(60,30,10,.18);padding:8px 10px;display:flex;gap:12px;z-index:5}
+.pop button{font:inherit;font-size:1.2rem;min-width:56px;padding:4px 0;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}.pop button:disabled{opacity:.3}
+li.it span{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.hint{color:var(--muted);font-size:.8rem;margin-top:6px}
+</style></head><body>
+<main class="note"><h1>לקנות</h1><ul id="list"><li class="msg">טוען…</li></ul>
+<form id="f" autocomplete="off"><input id="t" placeholder="+ מה לקנות?" enterkeyhint="done" aria-label="פריט חדש"><button>הוסף</button></form>
+<div class="hint" id="h">אפשר לכתוב "טמבור: ברגים" כדי להוסיף מתחת לחנות. לחיצה ארוכה על פריט מזיזה אותו ↑ ↓.</div>
+<div class="bought" id="b" hidden></div><ul id="dl" hidden></ul></main>
+<script>
+const F=new URLSearchParams(location.search).get('f')||'';
+document.getElementById('mf').href='/shop/manifest.json?f='+F;
+let D=null,busy=0,showDone=false;
+const $=id=>document.getElementById(id);
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.append(d);setTimeout(()=>d.remove(),3000)}
+async function api(op){
+  busy++;
+  try{const r=await fetch('/shop/api?f='+F,{method:'POST',body:JSON.stringify(op)});const j=await r.json();
+    if(j.error){render(j.error==='key'?'הקישור הזה כבר לא פעיל. בקשו מפבלו קישור חדש.':'משהו השתבש. נסו שוב.');return}
+    D=j;render()}
+  catch(e){toast('אין חיבור. נסו שוב.')}
+  finally{busy--}
+}
+function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
+function itemEl(i){
+  const li=el('li','it'+(i.done?' done':''));const cb=el('input');cb.type='checkbox';cb.checked=i.done;cb.setAttribute('aria-label','נקנה: '+i.t);
+  cb.addEventListener('change',()=>{i.done=cb.checked;render();api({t:'done',id:i.id,done:i.done})});
+  const sp=el('span',null,i.t);li.append(cb,sp);li.dataset.id=i.id;
+  if(!i.done&&D.seps.length){ // long press (or right click): ↑ ↓ to the line above / below
+    let t=null;const start=()=>{t=setTimeout(()=>{t=null;arrows(i)},500)},stop=()=>clearTimeout(t);
+    sp.addEventListener('touchstart',start,{passive:true});sp.addEventListener('touchend',stop);sp.addEventListener('touchmove',stop,{passive:true});
+    sp.addEventListener('contextmenu',e=>{e.preventDefault();arrows(i)})}
+  return li}
+let pop=null;
+function closePop(){if(pop){pop.remove();pop=null}}
+document.addEventListener('click',e=>{if(pop&&!pop.contains(e.target))closePop()},true);
+function arrows(i){
+  const order=['',...D.seps.map(s=>s.id)];
+  const at=()=>order.indexOf(order.includes(i.sec)?i.sec:'');
+  const show=()=>{closePop();const li=document.querySelector('li.it[data-id="'+i.id+'"]');if(!li)return;
+    pop=el('div','pop');const up=el('button',null,'↑'),dn=el('button',null,'↓');up.type=dn.type='button';
+    up.disabled=at()<=0;dn.disabled=at()>=order.length-1;
+    up.onclick=()=>go(-1);dn.onclick=()=>go(1);pop.append(up,dn);document.body.append(pop);
+    const r=li.getBoundingClientRect();pop.style.top=(r.bottom+window.scrollY+4)+'px';li.scrollIntoView({block:'nearest',behavior:'smooth'})};
+  const go=d=>{const n=at()+d;if(n<0||n>=order.length)return;i.sec=order[n];render();show();api({t:'sec',id:i.id,sec:i.sec})};
+  show()}
+function render(err){
+  const ul=$('list');ul.innerHTML='';
+  if(err){ul.append(el('li','msg',err));$('f').hidden=$('h').hidden=$('b').hidden=$('dl').hidden=true;return}
+  if(!D)return;
+  const open=D.items.filter(i=>!i.done),done=D.items.filter(i=>i.done);
+  open.filter(i=>!i.sec).forEach(i=>ul.append(itemEl(i)));
+  D.seps.forEach(s=>{const its=open.filter(i=>i.sec===s.id);if(!its.length)return;ul.append(el('li','sep',s.t));its.forEach(i=>ul.append(itemEl(i)))});
+  if(!open.length)ul.append(el('li','msg','הרשימה ריקה 🎉'));
+  $('h').hidden=!D.seps.length;
+  const b=$('b'),dl=$('dl');b.hidden=!done.length;b.innerHTML='';dl.innerHTML='';dl.hidden=!(done.length&&showDone);
+  if(done.length){
+    const t=el('button',null,(showDone?'הסתר':'הצג')+' נקנו ('+done.length+')');t.type='button';t.onclick=()=>{showDone=!showDone;render()};
+    const c=el('button',null,'נקה את מה שנקנה');c.type='button';c.onclick=()=>{D.items=D.items.filter(i=>!i.done);render();api({t:'clear'})};
+    b.append(t,c);if(showDone)done.forEach(i=>dl.append(itemEl(i)))}
+}
+$('f').addEventListener('submit',e=>{e.preventDefault();const v=$('t').value.trim();if(!v)return;$('t').value='';
+  let text=v,sec='';const m=v.match(/^([^:]{1,30}):\s*(.+)$/),hit=m&&D&&D.seps.find(s=>s.t.trim()===m[1].trim());if(hit){sec=hit.id;text=m[2].trim()}
+  const n=x=>x.replace(/\s+/g,' ').trim();
+  if(D&&D.items.some(i=>!i.done&&n(i.t)===n(text))){toast('כבר ברשימה: '+text);return} // no double "חלב"
+  if(D)D.items.push({id:'tmp',t:text,done:false,sec});render();api({t:'add',text,sec})});
+api({t:'get'});
+setInterval(()=>{if(!busy&&!pop&&!document.hidden&&document.activeElement!==$('t'))api({t:'get'})},20000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)api({t:'get'})});
+</script></body></html>
