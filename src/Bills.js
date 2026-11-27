@@ -160,7 +160,7 @@ function billsCmd() {
   billsTick(true);
   const waiting = billLabel_(BILL_TODO).getThreads(0, 20).length;
   send('🧾 חשבונות ממייל (בדיקה כל ' + BILL_EVERY_MIN + ' דקות):\n' +
-    BILL_RULES.map(r => '• ' + r.name + ': ' + [r.telegram && 'PDF לטלגרם', r.print !== false && (r.ask ? 'הדפסה אחרי אישור (' : 'הדפסה (') + captionSummary_(r.print) + ')',
+    BILL_RULES.map(r => '• ' + r.name + ': ' + [r.telegram && 'PDF לטלגרם', r.print !== false && 'הדפסה',
       r.drive && 'שמירה בדרייב'].filter(Boolean).join(' + ')).join('\n') +
     '\n\nמחכים לטיפול בתווית ' + BILL_TODO + ': ' + waiting);
 }
