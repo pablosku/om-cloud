@@ -317,7 +317,8 @@ const RELEASE_NOTES = '🆕 גרסה 23 עלתה. מה חדש:\n\n' +
   '1. תזכורות חוזרות: כל שבועיים, כל חודשיים, כל 3 חודשים, כל חצי שנה, כל שנה.\n' +
   '2. בתפריט: /klinka הוחלף ב-/clinic.\n' +
   '3. /clinic נותן את שעות הקליניקה בחודש הנוכחי (חודש אחר: "/clinic 10.26").\n' +
-  '4. /bills: ליד מי מודיעין כתוב רק "הדפסה".';
+  '4. /bills: ליד מי מודיעין כתוב רק "הדפסה".\n' +
+  '5. 📋 הדף של פבלו: כל הרשימות, התזכורות וההשראה היומית בדף אחד.';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },
