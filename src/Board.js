@@ -1,5 +1,5 @@
 // ===== Board: Pablo's one-page TODO board (web page served by doGet, data in the "secretary db" sheet) =====
-// Page: Board.html (google.script.run -> boardGet / boardOp). Opened from a separate web-app deployment
+// Page: BoardPage.html (google.script.run -> boardGet / boardOp). Opened from a separate web-app deployment
 // with access "Only myself"; every call also checks that the viewer is the script owner (boardOwner_).
 // Sheet tabs: board_lists, board_items, inspiration. Deletes are soft (deleted = time) and purged after 30 days.
 // Reminders: read from the Reminders calendar (next 7 days); done / undo / cancel / move / to-list act on it
@@ -23,7 +23,7 @@ function boardGuard_() { if (!boardOwner_()) throw new Error('not allowed'); }
 // doGet (Print.js) calls this when the request has no URL secret.
 function boardPage_() {
   if (!boardOwner_()) return HtmlService.createHtmlOutput('<p dir="rtl">אין גישה.</p>');
-  return HtmlService.createHtmlOutputFromFile('Board')
+  return HtmlService.createHtmlOutputFromFile('BoardPage')
     .setTitle('הדף של פבלו')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
