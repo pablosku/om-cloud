@@ -294,6 +294,10 @@ function command(text) {
   const [cmd, ...rest] = text.split(/\s+/);
   const c = cmd.toLowerCase().replace(/@.*/, '');
   if (c === '/list') return send(listText(7));
+  if (c === '/board') { // Board.js; "/board חדש" makes a new key, so an old link (if it leaked) stops working
+    if (/^(חדש|new)$/i.test(rest.join(''))) P.deleteProperty('BOARD_KEY');
+    return send('📋 הדף של פבלו:\n' + boardLink_() + '\n\nאל תעביר את הקישור הלאה. אם דלף: /board חדש');
+  }
   if (c === '/queue') return send(queueText());
   if (c === '/bills') return billsCmd(); // Bills.gs
   if (c === '/clinic' || c === '/klinka') return klinkaCmd(rest.join(' ') + ' החודש'); // Reports.gs; a month in the text wins, else this month (/klinka = old name)
@@ -312,16 +316,15 @@ function command(text) {
 
 // ---------- every minute ----------
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
-const VERSION = '23';
-const RELEASE_NOTES = '🆕 גרסה 23 עלתה. מה חדש:\n\n' +
-  '1. תזכורות חוזרות: כל שבועיים, כל חודשיים, כל 3 חודשים, כל חצי שנה, כל שנה.\n' +
-  '2. בתפריט: /klinka הוחלף ב-/clinic.\n' +
-  '3. /clinic נותן את שעות הקליניקה בחודש הנוכחי (חודש אחר: "/clinic 10.26").\n' +
-  '4. /bills: ליד מי מודיעין כתוב רק "הדפסה".\n' +
-  '5. 📋 הדף של פבלו: כל הרשימות, התזכורות וההשראה היומית בדף אחד.';
+const VERSION = '24';
+const RELEASE_NOTES = '🆕 גרסה 24 עלתה. מה חדש:\n\n' +
+  '1. 📋 הדף של פבלו נפתח עכשיו (במקום "אין גישה").\n' +
+  '2. /board שולח את הקישור לדף. שמור אותו בסימנייה או במסך הבית.\n' +
+  '3. אם הקישור דלף: "/board חדש" יוצר קישור חדש, והישן מפסיק לעבוד.';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },
+  { command: 'board', description: 'קישור לדף של פבלו' },
   { command: 'queue', description: 'מה מחכה להדפסה' },
   { command: 'bills', description: 'חשבונות ממייל' },
   { command: 'clinic', description: 'שעות קליניקה החודש' },
