@@ -7,7 +7,10 @@
 // Display settings (font and size per device kind, colours, bold, quote open) live in Script Property BOARD_VIEW.
 
 const BL_H = ['id', 'name', 'order', 'note', 'kind', 'deleted'];
-const BI_H = ['id', 'list', 'text', 'done', 'star', 'color', 'last_color', 'wait_note', 'wait_since', 'created', 'updated', 'deleted'];
+const BI_H = ['id', 'list', 'text', 'done', 'star', 'color', 'last_color', 'wait_note', 'wait_since', 'created', 'updated', 'deleted', 'kind', 'sec'];
+// kind: '' = task, 'sep' = a divider line (text = its label). sec: the divider an item sits under ('' = top of the note).
+// Shopping (27.11, replaces Google Keep): the note of kind 'shop' ("לקנות") is the family list. Its name is fixed and it
+// cannot be deleted. The family sees only it, on a page the Cloudflare Worker serves (shopApi_ below, key FAMILY_KEY).
 const BQ_H = ['sentence', 'commentary', 'source'];
 const BL = col_(BL_H), BI = col_(BI_H);
 const BOARD_DEFAULT_LISTS = ['טווח קצר', 'טווח ארוך', 'רעיונות'];
@@ -46,7 +49,8 @@ function boardPage_(q) {
 // ---------- read ----------
 function boardGet(k) {
   boardGuard_(k);
-  const lt = tab_('board_lists', BL_H), it = tab_('board_items', BI_H);
+  const lt = tab_('board_lists', BL_H), it = boardItemsTab_();
+  boardShopList_();
   let lrows = lt.getDataRange().getValues().slice(1).filter(r => r[BL.id]);
   if (!lrows.length) { // first open: the three paper lists
     BOARD_DEFAULT_LISTS.forEach((n, i) => lt.appendRow([bid_(), n, i, '', 'list', '']));
@@ -60,7 +64,8 @@ function boardGet(k) {
     byId[r[BI.list]].items.push({
       id: String(r[BI.id]), t: String(r[BI.text]), done: r[BI.done] === true, star: r[BI.star] === true,
       c: String(r[BI.color] || ''), lastC: String(r[BI.last_color] || ''),
-      wait: r[BI.wait_since] ? { note: String(r[BI.wait_note] || ''), since: dstr_(r[BI.wait_since]) } : null
+      wait: r[BI.wait_since] ? { note: String(r[BI.wait_note] || ''), since: dstr_(r[BI.wait_since]) } : null,
+      k: String(r[BI.kind] || ''), sec: String(r[BI.sec] || '')
     });
   });
   return { lists, cal: boardCal_(), quote: boardQuote_(), view: JSON.parse(prop('BOARD_VIEW') || '{}'), today: dstr_(new Date()) };
@@ -98,7 +103,7 @@ function boardDo_(op) {
   const now = new Date();
   switch (op.t) {
     case 'item.add': {
-      tab_('board_items', BI_H).appendRow([op.id, op.list, String(op.text).slice(0, 500), false, false, '', '', '', '', now, now, '']);
+      boardItemsTab_().appendRow([op.id, op.list, String(op.text).slice(0, 500), false, false, '', '', '', '', now, now, '', op.k === 'sep' ? 'sep' : '', op.sec || '']);
       return;
     }
     case 'item.set': { // fields: text, done, star, c, lastC, wait (null | {note, since}), list
@@ -109,11 +114,17 @@ function boardDo_(op) {
       if ('c' in f) set.color = f.c || '';
       if ('lastC' in f) set.last_color = f.lastC || '';
       if ('list' in f) set.list = f.list;
+      if ('sec' in f) set.sec = f.sec || '';
       if ('wait' in f) { set.wait_note = f.wait ? f.wait.note || '' : ''; set.wait_since = f.wait ? f.wait.since : ''; }
       set.updated = now;
       return rowSet_('board_items', BI_H, op.id, set);
     }
     case 'item.del': return rowSet_('board_items', BI_H, op.id, { deleted: now });
+    case 'sep.del': { // remove a divider: its items move up to the top of the note (not deleted)
+      const t = boardItemsTab_(), v = t.getDataRange().getValues();
+      v.forEach((r, i) => { if (i && String(r[BI.sec]) === String(op.id)) t.getRange(i + 1, BI.sec + 1).setValue(''); });
+      return rowSet_('board_items', BI_H, op.id, { deleted: now });
+    }
     case 'list.clear': { // delete the done items of one list
       const t = tab_('board_items', BI_H), v = t.getDataRange().getValues();
       v.forEach((r, i) => { if (i && r[BI.list] === op.id && r[BI.done] === true && !r[BI.deleted]) t.getRange(i + 1, BI.deleted + 1).setValue(now); });
@@ -127,6 +138,7 @@ function boardDo_(op) {
     }
     case 'list.set': {
       const set = {};
+      if ('name' in op && op.id === boardShopList_()) delete op.name; // "לקנות" keeps its name
       if ('name' in op) set.name = String(op.name).slice(0, 80);
       if ('note' in op) set.note = op.note || '';
       return rowSet_('board_lists', BL_H, op.id, set);
@@ -137,7 +149,7 @@ function boardDo_(op) {
       v.forEach((r, i) => { if (i && pos[r[BL.id]] && r[BL.order] !== pos[r[BL.id]]) t.getRange(i + 1, BL.order + 1).setValue(pos[r[BL.id]]); });
       return;
     }
-    case 'list.del': return rowSet_('board_lists', BL_H, op.id, { deleted: now });
+    case 'list.del': if (op.id === boardShopList_()) return 'kept'; return rowSet_('board_lists', BL_H, op.id, { deleted: now });
     case 'view.set': P.setProperty('BOARD_VIEW', JSON.stringify(op.view || {})); return;
     case 'rem.done': case 'rem.undo': case 'rem.cancel': case 'rem.move': case 'rem.tolist': return boardRem_(op);
   }
@@ -172,6 +184,79 @@ function boardRem_(op) {
 }
 
 // ---------- helpers ----------
+// board_items gained two columns (kind, sec) on 27.11: write the header once on an older sheet
+function boardItemsTab_() {
+  const t = tab_('board_items', BI_H);
+  if (t.getLastColumn() < BI_H.length) t.getRange(1, 1, 1, BI_H.length).setValues([BI_H]);
+  return t;
+}
+// the id of the "לקנות" note; made on first use, right after the first note
+function boardShopList_() {
+  const c = CacheService.getScriptCache(), hit = c.get('shop_list');
+  if (hit) return hit;
+  const t = tab_('board_lists', BL_H), v = t.getDataRange().getValues().slice(1).filter(r => r[BL.id]);
+  let r = v.find(x => x[BL.kind] === 'shop' && !x[BL.deleted]), id;
+  if (r) id = String(r[BL.id]);
+  else {
+    id = bid_();
+    const live = v.filter(x => !x[BL.deleted]).sort((a, b) => a[BL.order] - b[BL.order]);
+    t.appendRow([id, 'לקנות', live.length ? Number(live[0][BL.order]) + 0.5 : 0, '', 'shop', '']);
+  }
+  c.put('shop_list', id, 21600);
+  return id;
+}
+
+// ---------- shopping: the family page (via the Worker) and OM voice ----------
+// The open (not done) items of "לקנות", in the order the board shows them: top items, then each divider and its items.
+function shopRead_() {
+  const id = boardShopList_(), v = boardItemsTab_().getDataRange().getValues().slice(1)
+    .filter(r => r[BI.id] && !r[BI.deleted] && String(r[BI.list]) === id);
+  const seps = v.filter(r => r[BI.kind] === 'sep').map(r => ({ id: String(r[BI.id]), t: String(r[BI.text]) }));
+  const ok = {}; seps.forEach(x => ok[x.id] = 1);
+  const items = v.filter(r => r[BI.kind] !== 'sep').map(r => ({ id: String(r[BI.id]), t: String(r[BI.text]), done: r[BI.done] === true,
+    sec: ok[r[BI.sec]] ? String(r[BI.sec]) : '' }));
+  return { seps, items };
+}
+// add items to "לקנות" (OM voice and the family page). store = a divider label ("טמבור") or ''; a new label makes a divider.
+// Returns {added: [], dup: []}: an item already open on the list is not added twice.
+function shopAdd_(names, store, secId) {
+  const id = boardShopList_(), cur = shopRead_(), now = new Date(), t = boardItemsTab_();
+  const norm = x => String(x).replace(/\s+/g, ' ').trim();
+  let sec = cur.seps.some(x => x.id === secId) ? secId : '';
+  if (!sec && store) {
+    const s = cur.seps.find(x => norm(x.t) === norm(store));
+    if (s) sec = s.id; else { sec = bid_(); t.appendRow([sec, id, norm(store).slice(0, 60), false, false, '', '', '', '', now, now, '', 'sep', '']); }
+  }
+  const open = {}; cur.items.forEach(x => { if (!x.done) open[norm(x.t)] = 1; });
+  const res = { added: [], dup: [] };
+  names.map(norm).filter(String).forEach(n => {
+    if (open[n]) { res.dup.push(n); return; }
+    open[n] = 1; res.added.push(n);
+    t.appendRow([bid_(), id, n.slice(0, 200), false, false, '', '', '', '', now, now, '', '', sec]);
+  });
+  return res;
+}
+// doGet ?s=URL_SECRET&action=shop&f=FAMILY_KEY&op=<json> (the Worker calls it). Family ops only: read, add, tick, clear.
+function shopApi_(q) {
+  if (!prop('FAMILY_KEY') || q.f !== prop('FAMILY_KEY')) return json_({ error: 'key' });
+  const op = q.op ? JSON.parse(q.op) : { t: 'get' };
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    if (op.t === 'add') shopAdd_([String(op.text || '').slice(0, 200)], '', op.sec);
+    if (op.t === 'done' && shopRead_().items.some(x => x.id === op.id)) rowSet_('board_items', BI_H, op.id, { done: !!op.done, updated: new Date() });
+    if (op.t === 'clear') { const t = boardItemsTab_(), v = t.getDataRange().getValues(), id = boardShopList_();
+      v.forEach((r, i) => { if (i && String(r[BI.list]) === id && r[BI.done] === true && !r[BI.deleted]) t.getRange(i + 1, BI.deleted + 1).setValue(new Date()); }); }
+  } finally { lock.releaseLock(); }
+  return json_(shopRead_());
+}
+// the family link: the Worker's address (from the Telegram webhook) + /shop?f=FAMILY_KEY. "/family חדש" makes a new key.
+function familyLink_(fresh) {
+  if (fresh || !prop('FAMILY_KEY')) P.setProperty('FAMILY_KEY', Utilities.getUuid().replace(/-/g, ''));
+  const w = tg('getWebhookInfo', {}), u = w && w.result && w.result.url;
+  if (!u) return null;
+  return u.replace(/^(https:\/\/[^\/]+).*$/, '$1') + '/shop?f=' + prop('FAMILY_KEY');
+}
+
 function rowSet_(name, header, id, set) {
   const t = tab_(name, header), ids = t.getRange(1, 1, t.getLastRow(), 1).getValues();
   const i = ids.findIndex(r => String(r[0]) === String(id));
