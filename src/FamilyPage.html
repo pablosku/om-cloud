@@ -34,11 +34,14 @@ form button{font:inherit;border:0;background:var(--accent);color:#fff;border-rad
 .bought button{font:inherit;font-size:.85rem;border:0;background:none;color:var(--muted);text-decoration:underline;padding:4px}
 .msg{text-align:center;color:var(--muted);padding:30px 0}
 .toast{position:fixed;bottom:max(16px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:.9rem}
+.pop{position:absolute;left:24px;background:var(--note);border:1px solid var(--edge);border-radius:12px;box-shadow:0 6px 20px rgba(60,30,10,.18);padding:8px 10px;display:flex;gap:12px;z-index:5}
+.pop button{font:inherit;font-size:1.2rem;min-width:56px;padding:4px 0;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}.pop button:disabled{opacity:.3}
+li.it span{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .hint{color:var(--muted);font-size:.8rem;margin-top:6px}
 </style></head><body>
 <main class="note"><h1>לקנות</h1><ul id="list"><li class="msg">טוען…</li></ul>
 <form id="f" autocomplete="off"><input id="t" placeholder="+ מה לקנות?" enterkeyhint="done" aria-label="פריט חדש"><button>הוסף</button></form>
-<div class="hint" id="h">אפשר לכתוב "טמבור: ברגים" כדי להוסיף מתחת לחנות.</div>
+<div class="hint" id="h">אפשר לכתוב "טמבור: ברגים" כדי להוסיף מתחת לחנות. לחיצה ארוכה על פריט מזיזה אותו ↑ ↓.</div>
 <div class="bought" id="b" hidden></div><ul id="dl" hidden></ul></main>
 <script>
 const F=new URLSearchParams(location.search).get('f')||'';
@@ -58,7 +61,25 @@ function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=
 function itemEl(i){
   const li=el('li','it'+(i.done?' done':''));const cb=el('input');cb.type='checkbox';cb.checked=i.done;cb.setAttribute('aria-label','נקנה: '+i.t);
   cb.addEventListener('change',()=>{i.done=cb.checked;render();api({t:'done',id:i.id,done:i.done})});
-  li.append(cb,el('span',null,i.t));return li}
+  const sp=el('span',null,i.t);li.append(cb,sp);li.dataset.id=i.id;
+  if(!i.done&&D.seps.length){ // long press (or right click): ↑ ↓ to the line above / below
+    let t=null;const start=()=>{t=setTimeout(()=>{t=null;arrows(i)},500)},stop=()=>clearTimeout(t);
+    sp.addEventListener('touchstart',start,{passive:true});sp.addEventListener('touchend',stop);sp.addEventListener('touchmove',stop,{passive:true});
+    sp.addEventListener('contextmenu',e=>{e.preventDefault();arrows(i)})}
+  return li}
+let pop=null;
+function closePop(){if(pop){pop.remove();pop=null}}
+document.addEventListener('click',e=>{if(pop&&!pop.contains(e.target))closePop()},true);
+function arrows(i){
+  const order=['',...D.seps.map(s=>s.id)];
+  const at=()=>order.indexOf(order.includes(i.sec)?i.sec:'');
+  const show=()=>{closePop();const li=document.querySelector('li.it[data-id="'+i.id+'"]');if(!li)return;
+    pop=el('div','pop');const up=el('button',null,'↑'),dn=el('button',null,'↓');up.type=dn.type='button';
+    up.disabled=at()<=0;dn.disabled=at()>=order.length-1;
+    up.onclick=()=>go(-1);dn.onclick=()=>go(1);pop.append(up,dn);document.body.append(pop);
+    const r=li.getBoundingClientRect();pop.style.top=(r.bottom+window.scrollY+4)+'px';li.scrollIntoView({block:'nearest',behavior:'smooth'})};
+  const go=d=>{const n=at()+d;if(n<0||n>=order.length)return;i.sec=order[n];render();show();api({t:'sec',id:i.id,sec:i.sec})};
+  show()}
 function render(err){
   const ul=$('list');ul.innerHTML='';
   if(err){ul.append(el('li','msg',err));$('f').hidden=$('h').hidden=$('b').hidden=$('dl').hidden=true;return}
@@ -80,6 +101,6 @@ $('f').addEventListener('submit',e=>{e.preventDefault();const v=$('t').value.tri
   if(D&&D.items.some(i=>!i.done&&n(i.t)===n(text))){toast('כבר ברשימה: '+text);return} // no double "חלב"
   if(D)D.items.push({id:'tmp',t:text,done:false,sec});render();api({t:'add',text,sec})});
 api({t:'get'});
-setInterval(()=>{if(!busy&&!document.hidden&&document.activeElement!==$('t'))api({t:'get'})},20000);
+setInterval(()=>{if(!busy&&!pop&&!document.hidden&&document.activeElement!==$('t'))api({t:'get'})},20000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)api({t:'get'})});
 </script></body></html>

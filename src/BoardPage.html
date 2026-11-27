@@ -386,6 +386,16 @@ function toSep(from,i,list,sc){
   else if((i.sec||'')!==sc){i.sec=sc;send({t:'item.set',id:i.id,f:{sec:sc}})}
   renderLists()}
 // a divider line: the label is edited like a title, ✕ removes the line (its items move up). No collapsing (Pablo 27.11).
+// ↑ ↓ move an item to the line above / below; the little menu stays open (and follows the item) until a tap elsewhere
+function secArrows(list,i){
+  const order=['',...list.items.filter(x=>x.k==='sep').map(x=>x.id)];
+  const go=d=>{const k=order.indexOf(order.includes(i.sec)?i.sec:''),n=k+d;if(n<0||n>=order.length)return;toSep(list,i,list,order[n]);show()};
+  const show=()=>{const a=document.querySelector(`li.item[data-id="${i.id}"] .txt`);if(!a)return;
+    openPop(a,p=>{p.classList.add('nm');const k=order.indexOf(order.includes(i.sec)?i.sec:'');
+      const up=btn('↑','למעלה',()=>go(-1),'arrow'),dn=btn('↓','למטה',()=>go(1),'arrow');up.disabled=k<=0;dn.disabled=k>=order.length-1;
+      p.append(el('div',{className:'btns'},[up,dn]))});
+    a.closest('li').scrollIntoView({block:'nearest',behavior:'smooth'})};
+  show()}
 function sepEl(list,sp){
   const li=el('li',{className:'sep'});li.dataset.sep=sp.id;
   const nm=el('span',{className:'name'});editableName(nm,()=>sp.t,v=>{sp.t=v;send({t:'item.set',id:sp.id,f:{text:v}})});
@@ -398,6 +408,7 @@ function sepEl(list,sp){
   return li}
 function itemEl(list,i){
   const li=el('li',{className:'item'+(i.done?' done':'')+(i.wait&&!i.done?' waiting':'')});
+  li.dataset.id=i.id;
   if(i.c)li.style.setProperty('--c',`var(--c-${i.c})`);
   li.draggable=!i.done&&!TOUCH;
   li.addEventListener('dragstart',e=>{if(editing===i.id){e.preventDefault();return}drag={list,item:i}});
@@ -411,7 +422,9 @@ function itemEl(list,i){
   tx.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();editing===i.id?tx.blur():startEdit()}if(e.key==='Escape'){tx.textContent=i.t;tx.blur()}});
   tx.addEventListener('blur',()=>{if(editing!==i.id||tx.contentEditable!=='true')return;editing=null;const v=tx.textContent.trim();
     if(!v){list.items=list.items.filter(x=>x!==i);send({t:'item.del',id:i.id})}else if(v!==i.t){i.t=v;send({t:'item.set',id:i.id,f:{text:v}})}renderLists()});
-  longPress(tx,()=>{if(editing===i.id)return;const seps=list.items.filter(x=>x.k==='sep');
+  longPress(tx,()=>{if(editing===i.id)return;
+    if(list.kind==='shop')return secArrows(list,i); // shopping: only ↑ ↓ between the lines (Pablo 27.11)
+    const seps=list.items.filter(x=>x.k==='sep');
     if(!seps.length)return moveMenu(tx,'העבר ל...',list,l=>moveItem(list,i,l));
     openPop(tx,p=>{const m=el('div',{className:'menu'});
       [{id:'',t:'למעלה'},...seps].filter(x=>x.id!==(i.sec||'')).forEach(x=>m.append(btn(x.t,'העבר ל'+x.t,()=>{closePop();toSep(list,i,list,x.id)})));

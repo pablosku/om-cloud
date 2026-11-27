@@ -323,7 +323,8 @@ function command(text) {
 const VERSION = '27';
 const RELEASE_NOTES = '🆕 גרסה 27 עלתה. מה חדש:\n\n' +
   '1. 🛒 אי אפשר להוסיף ל"לקנות" פריט שכבר ברשימה (גם בדף שלך וגם בדף של המשפחה).\n' +
-  '2. קווי הפרדה כבר לא נסגרים: רק שם וקו.';
+  '2. קווי הפרדה כבר לא נסגרים: רק שם וקו.\n' +
+  '3. לחיצה ארוכה על פריט ב"לקנות": שני חצים ↑ ↓ שמזיזים אותו לקו שמעל או מתחת (בלי מעבר לפתק אחר). גם בדף של המשפחה.';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },
