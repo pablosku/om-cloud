@@ -175,6 +175,7 @@ const FONTS={rubik:['Rubik','Rubik',[400,600]],'rubik-l':['Rubik דק','Rubik',[
 const TOUCH=matchMedia('(pointer:coarse)').matches, DEV=TOUCH?'phone':'pc';
 const CLOCK='<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="6.6"/><path d="M8 4.2V8l2.6 1.6"/></svg>';
 const CACHE='pablo-board-cache-v1';
+const KEY='<?= boardKey ?>';
 let S=null, V={font_pc:'rubik',font_phone:'rubik',size_pc:1,size_phone:1,bold:false,bg:'orange',note:'',qopen:false,calNote:'',calName:''};
 let editing=null, drag=null;
 
@@ -198,13 +199,13 @@ function pump(){
   google.script.run.withSuccessHandler(()=>{queue.shift();busy=false;fails=0;pump()})
     .withFailureHandler(err=>{busy=false;fails++;
       if(fails>=4){toast('לא הצלחתי לשמור: '+(err&&err.message||err)+'. רענן את הדף.',8000);queue.length=0;fails=0;pump();return}
-      setTimeout(pump,1500*fails)}).boardOp(queue[0]);
+      setTimeout(pump,1500*fails)}).boardOp(queue[0],KEY);
 }
 function load(quiet){
   google.script.run.withSuccessHandler(d=>{
     if(queue.length||editing||!document.getElementById('pop').hidden){return} // don't pull the page from under the user
     S=d; Object.assign(V,d.view||{}); applyView(); renderAll(); cache();
-  }).withFailureHandler(err=>{if(!quiet)toast('טעינה נכשלה: '+(err&&err.message||err),6000)}).boardGet();
+  }).withFailureHandler(err=>{if(!quiet)toast('טעינה נכשלה: '+(err&&err.message||err),6000)}).boardGet(KEY);
 }
 let viewT=null;
 function saveView(){applyView();clearTimeout(viewT);viewT=setTimeout(()=>send({t:'view.set',view:V}),800)}

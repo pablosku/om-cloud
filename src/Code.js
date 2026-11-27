@@ -294,6 +294,7 @@ function command(text) {
   const [cmd, ...rest] = text.split(/\s+/);
   const c = cmd.toLowerCase().replace(/@.*/, '');
   if (c === '/list') return send(listText(7));
+  if (c === '/board') return send('📋 הדף של פבלו:\n' + boardLink_()); // Board.js
   if (c === '/queue') return send(queueText());
   if (c === '/bills') return billsCmd(); // Bills.gs
   if (c === '/clinic' || c === '/klinka') return klinkaCmd(rest.join(' ') + ' החודש'); // Reports.gs; a month in the text wins, else this month (/klinka = old name)
@@ -322,6 +323,7 @@ const RELEASE_NOTES = '🆕 גרסה 23 עלתה. מה חדש:\n\n' +
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },
+  { command: 'board', description: 'קישור לדף של פבלו' },
   { command: 'queue', description: 'מה מחכה להדפסה' },
   { command: 'bills', description: 'חשבונות ממייל' },
   { command: 'clinic', description: 'שעות קליניקה החודש' },

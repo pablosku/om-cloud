@@ -17,7 +17,7 @@ const setCell_ = (t, row, field, v) => t.getRange(row, J[field] + 1).setValue(v)
 // ---------- web app for the laptop ----------
 function doGet(e) {
   const q = e.parameter || {};
-  if (!q.s) return boardPage_(); // Board.js: the TODO board page (owner only)
+  if (!q.s) return boardPage_(q); // Board.js: the TODO board page (owner only)
   if (q.s !== prop('URL_SECRET')) return out_('no');
   try {
     if (q.action === 'pull') return printPull_(q);

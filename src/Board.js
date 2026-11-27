@@ -14,24 +14,38 @@ const BOARD_DEFAULT_LISTS = ['טווח קצר', 'טווח ארוך', 'רעיונ
 const BOARD_PURGE_DAYS = 30;
 function col_(h) { const o = {}; h.forEach((k, i) => o[k] = i); return o; }
 
-function boardOwner_() {
+// Access (fix 27.11): on a consumer account Session.getActiveUser() came back empty, so the owner check
+// alone said "no access". Now the page also opens with ?k=<BOARD_KEY>; /board in Telegram sends that link.
+// The board deployment itself is "Only myself", so Google still asks for Pablo's sign-in.
+const BOARD_DEPLOY = 'AKfycbwymTXGPFNnHvgM89_nNGq3a3zjeEpIkrzuORAeh4Pybu0pnrcPeCvNtxGuyxysAS8-cw';
+function boardKey_() {
+  let k = prop('BOARD_KEY');
+  if (!k) { k = Utilities.getUuid().replace(/-/g, ''); P.setProperty('BOARD_KEY', k); }
+  return k;
+}
+function boardLink_() { return 'https://script.google.com/macros/s/' + BOARD_DEPLOY + '/exec?k=' + boardKey_(); }
+function boardOwner_(k) {
+  if (k && prop('BOARD_KEY') && String(k) === prop('BOARD_KEY')) return true;
   try { const a = Session.getActiveUser().getEmail(); return !!a && a === Session.getEffectiveUser().getEmail(); }
   catch (e) { return false; }
 }
-function boardGuard_() { if (!boardOwner_()) throw new Error('not allowed'); }
+function boardGuard_(k) { if (!boardOwner_(k)) throw new Error('not allowed'); }
 
 // doGet (Print.js) calls this when the request has no URL secret.
-function boardPage_() {
-  if (!boardOwner_()) return HtmlService.createHtmlOutput('<p dir="rtl">אין גישה.</p>');
-  return HtmlService.createHtmlOutputFromFile('BoardPage')
+function boardPage_(q) {
+  const k = (q && q.k) || '';
+  if (!boardOwner_(k)) return HtmlService.createHtmlOutput('<p dir="rtl" style="font-family:sans-serif">אין גישה. שלח /board לבוט OM כדי לקבל את הקישור.</p>');
+  const t = HtmlService.createTemplateFromFile('BoardPage');
+  t.boardKey = k;
+  return t.evaluate()
     .setTitle('הדף של פבלו')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
 
 // ---------- read ----------
-function boardGet() {
-  boardGuard_();
+function boardGet(k) {
+  boardGuard_(k);
   const lt = tab_('board_lists', BL_H), it = tab_('board_items', BI_H);
   let lrows = lt.getDataRange().getValues().slice(1).filter(r => r[BL.id]);
   if (!lrows.length) { // first open: the three paper lists
@@ -72,8 +86,8 @@ function boardQuote_() {
 }
 
 // ---------- write: one small operation per call, in the order the page sent them ----------
-function boardOp(op) {
-  boardGuard_();
+function boardOp(op, k) {
+  boardGuard_(k);
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try { return boardDo_(op) || 'ok'; }
   catch (err) { log('board op error', op, String(err && err.stack || err)); throw err; }
