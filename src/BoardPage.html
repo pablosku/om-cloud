@@ -94,6 +94,11 @@ details.donebox[open] summary::before{content:"▾"}
 .clear{border:0;background:none;color:var(--muted);font-size:.8rem;margin-inline-start:auto;padding:2px 6px;text-decoration:underline}
 .newlist{border:1.5px dashed var(--line);border-radius:16px;min-height:120px;display:flex;align-items:center;justify-content:center;color:var(--muted);background:transparent;font-size:1rem}
 .pal{position:absolute;left:10px;bottom:6px;border:0;background:none;padding:2px 4px;font-size:15px;line-height:1;opacity:0;filter:grayscale(.4);border-radius:6px}
+.pop.nm{width:auto;padding:10px 12px;gap:8px;align-items:center}
+.pop.nm .swatches{flex-wrap:nowrap;gap:6px}.pop.nm .swatches button{width:20px;height:20px;font-size:0}
+.pop.nm hr{width:100%;border:0;border-top:1px solid var(--line);margin:0}
+.pop.nm .btns{justify-content:center;gap:12px}
+.pop.nm .bin{border:0;background:none;font-size:15px;padding:4px 10px;opacity:.7}
 .pop .arrow{font-size:1.15rem;min-width:52px;padding:4px 0}.pop .arrow:disabled{opacity:.3;cursor:default}
 .pal.dots{filter:none;color:var(--muted);font-size:18px;font-weight:700;padding:0 6px}
 .pal.dots[draggable="true"]{cursor:grab}
@@ -221,7 +226,7 @@ function applyView(){
 /* ---------- floating window ---------- */
 const pop=document.getElementById('pop'); let popFor=null;
 function openPop(anchor,build){
-  pop.innerHTML='';build(pop);pop.hidden=false;popFor=anchor;
+  pop.innerHTML='';pop.className='pop';build(pop);pop.hidden=false;popFor=anchor;
   const r=anchor.getBoundingClientRect(),w=pop.offsetWidth,h=pop.offsetHeight;
   pop.style.left=Math.min(Math.max(16,r.right-w),innerWidth-w-16)+'px';
   let top=r.bottom+6; if(top+h>innerHeight-8)top=Math.max(8,r.top-h-6); pop.style.top=top+'px';
@@ -333,17 +338,17 @@ function moveNote(l,to){
 function noteMenu(sec,list,getC,setC,del){
   const name=()=>list===CAL?(V.calName||'תזכורות קרובות'):list.name;
   const b=btn('⋯','אפשרויות הפתק',()=>openPop(b,build),'pal dots');
-  const build=p=>{const k=seq().indexOf(list),n=seq().length;
-    p.append(el('h3',{textContent:'צבע הפתק'}),swatches(NOTE_COLORS,getC,c=>{setC(c);closePop()},'var(--note-def,var(--note-auto))'));
-    const mv=el('div',{className:'btns'});
+  // compact (Pablo 27.11): one row of small colours | ↑ ↓ | small bin. No headings.
+  const build=p=>{const k=seq().indexOf(list),n=seq().length;p.classList.add('nm');
+    p.append(swatches(NOTE_COLORS,getC,c=>{setC(c);closePop()},'var(--note-def,var(--note-auto))'),el('hr'));
     const up=btn('↑','הזז למעלה',()=>{closePop();moveNote(list,k-1)},'arrow'),dn=btn('↓','הזז למטה',()=>{closePop();moveNote(list,k+1)},'arrow');
-    up.disabled=k<=0;dn.disabled=k>=n-1;mv.append(up,dn);
-    p.append(el('h3',{textContent:'הזזה'}),mv);
-    if(del)p.append(btn('🗑 מחק פתק','מחק פתק',()=>openPop(b,q=>{
+    up.disabled=k<=0;dn.disabled=k>=n-1;p.append(el('div',{className:'btns'},[up,dn]));
+    if(del)p.append(el('hr'),btn('🗑','מחק פתק',()=>openPop(b,q=>{
       q.append(el('h3',{textContent:`למחוק את "${name()}"?`}),el('span',{textContent:list.items.length?`יימחקו גם ${list.items.length} המשימות שבו.`:'הפתק ריק.'}),
         el('div',{className:'btns'},[btn('ביטול','ביטול',closePop,'primary keep'),btn('מחק','מחק',()=>{closePop();del()},'danger')]));
-      setTimeout(()=>{const x=q.querySelector('.keep');if(x)x.focus()},0)}),'danger'));
+      setTimeout(()=>{const x=q.querySelector('.keep');if(x)x.focus()},0)}),'bin'));
   };
+
   if(!TOUCH){b.draggable=true;b.title='אפשרויות. אפשר גם לגרור כדי להזיז את הפתק';
     b.addEventListener('dragstart',e=>{drag={note:list};e.dataTransfer.setData('text/plain','');e.dataTransfer.setDragImage(sec,20,20);setTimeout(()=>sec.classList.add('ghost'),0)});
     b.addEventListener('dragend',()=>{sec.classList.remove('ghost');drag=null})}
