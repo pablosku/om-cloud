@@ -1,4 +1,7 @@
-// ===== Office Manager Cloud: shopping list in Google Keep (add only) =====
+// ===== Office Manager Cloud: shopping list by voice =====
+// 27.11 (v26): Google Keep is dropped (its unofficial login kept being revoked). Items now go straight to the
+// "לקנות" note on the board (Board.js shopAdd_), which the family also sees. Nothing is queued for the laptop any
+// more, so keepPull_ finds no job and print_agent's Keep code stays idle. The old notes below describe the Keep flow.
 // Pablo says "תוסיף לקניות חלב, ביצים ולחם" (usually by voice, while driving). Gemini splits the items,
 // they wait in the "keep" tab, and the laptop print agent adds them to the Keep list on its next pull
 // (Keep has no API for a personal account, so gkeepapi runs on the laptop; its master token never leaves it).
@@ -10,7 +13,7 @@
 const KEEP_H = ['id', 'time', 'items', 'status', 'tries', 'sent_at', 'done_at', 'note', 'bot_msg_id'];
 const KJ = {}; KEEP_H.forEach((h, i) => { KJ[h] = i; });
 const KEEP_TIMEOUT = 10 * 60000, KEEP_RETRY = 5 * 60000, KEEP_DAYS = 3, KEEP_TRIES = 5; // a failed try waits 5 min
-const KEEP_RE = /קניות|לקנות|לסופר|למכולת|רשימה/;
+const KEEP_RE = /קניות|לקנות|לסופר|למכולת/; // not 'רשימה': board notes are lists too
 // command words Gemini sometimes leaves at the start of an item ("קניות חלב" -> "חלב")
 const KEEP_CMD_RE = /^(?:(?:תוסיף|תוסיפי|הוסף|להוסיף|תכניס|תרשום)\s+)?(?:ל?רשימת\s+(?:ה)?(?:קניות|לקנות)|ל?(?:ה)?קניות|לרשימה|לקנות)\s*[:,\-–]?\s*(?=\S)/;
 const keepList_ = () => prop('KEEP_LIST') || 'לקנות';
@@ -24,21 +27,24 @@ function keepHandle(text) {
     'like "מחר ב-8 לקנות חלב"), a question or anything else is NOT. ' +
     'If yes, split it into separate items exactly as said, in Hebrew, one product per item, keeping a quantity or detail with its item ' +
     '("2 חלב", "שמן זית", "לחם מלא"). Drop the command words ("תוסיף", "קניות", "לקניות", "לרשימת קניות", "לרשימה"): "קניות חלב" = ["חלב"]. ' +
-    'Answer JSON only: {"add": true, "items": ["..."]} or {"add": false}.' }]);
+    'If a store or section is named ("בטמבור", "בירקן", "מוצרי חלב"), give it as store, one or two words without the prefix ב/ל ("טמבור"); else "". ' +
+    'The list already has these sections: ' + (shopRead_().seps.map(x => x.t).join(', ') || 'none') + '. If the named one means one of them, use that exact name. ' +
+    'Answer JSON only: {"add": true, "items": ["..."], "store": ""} or {"add": false}.' }]);
   if (r === null) return null;
   const items = (r.add && Array.isArray(r.items) ? r.items : []).map(s => String(s).replace(KEEP_CMD_RE, '').trim()).filter(String).slice(0, 30);
   if (!items.length) return false;
-  const online = laptopOnline_(); // Print.gs
-  const res = send('🛒 ' + items.join(', ') + '\n' + (online ? 'מוסיף לקיפ…' : 'נשמר. אוסיף לקיפ כשהמחשב בבית יידלק.'));
-  const msgId = res && res.result ? res.result.message_id : '';
-  keepTab_().appendRow([Utilities.getUuid().slice(0, 8), new Date(), JSON.stringify(items), 'waiting', 0, '', '', '', msgId]);
-  P.setProperty('KEEP_PENDING', '1');
-  log('keep queued', items);
+  const store = String(r.store || '').trim().slice(0, 40);
+  const res = shopAdd_(items, store); // Board.js
+  send(res.added.length ? '🛒 נוסף ל"לקנות"' + (store ? ' (' + store + ')' : '') + ': ' + res.added.join(', ') + (res.dup.length ? '\nכבר ברשימה: ' + res.dup.join(', ') : '')
+    : '👍 כבר ברשימה: ' + res.dup.join(', '));
+  log('shop add', store, res);
   return true;
 }
 
 // called from printPull_ when no print or fetch job waits: the oldest keep job, or null
 function keepPull_() {
+  if (prop('KEEP_PENDING')) P.deleteProperty('KEEP_PENDING');
+  return null; // v26: Keep is off. The laptop gets no Keep job, so old waiting rows are never sent.
   if (!prop('KEEP_PENDING')) return null;
   const t = keepTab_(), rows = t.getDataRange().getValues();
   let pick = -1, open = 0;

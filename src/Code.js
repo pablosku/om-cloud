@@ -298,6 +298,10 @@ function command(text) {
     if (/^(חדש|new)$/i.test(rest.join(''))) P.deleteProperty('BOARD_KEY');
     return send('📋 הדף של פבלו:\n' + boardLink_() + '\n\nאל תעביר את הקישור הלאה. אם דלף: /board חדש');
   }
+  if (c === '/family') { // Board.js: the family shopping page (only "לקנות"); "/family חדש" makes a new key
+    const u = familyLink_(/^(חדש|new)$/i.test(rest.join('')));
+    return send(u ? '🛒 הקישור של המשפחה לרשימת הקניות:\n' + u + '\n\nרק הקניות, בלי שאר הדף. אם דלף: /family חדש' : 'לא מצאתי את כתובת השרת. נסה שוב בעוד דקה.');
+  }
   if (c === '/queue') return send(queueText());
   if (c === '/bills') return billsCmd(); // Bills.gs
   if (c === '/clinic' || c === '/klinka') return klinkaCmd(rest.join(' ') + ' החודש'); // Reports.gs; a month in the text wins, else this month (/klinka = old name)
@@ -316,14 +320,19 @@ function command(text) {
 
 // ---------- every minute ----------
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
-const VERSION = '25';
-const RELEASE_NOTES = '🆕 גרסה 25 עלתה. מה חדש בדף של פבלו:\n\n' +
-  '1. תזכורת חוזרת מסומנת בסמל קטן ועדין של שני חצים במקום האייקון הבולט.\n' +
-  '2. אפשר לשנות את סדר הפתקים: לגרור את הידית ⋮⋮ (בפינת הפתק, כשהעכבר עליו) לפתק אחר, או ללחוץ עליה ולבחור "קודם" או "אחר כך" (גם בטלפון).';
+const VERSION = '26';
+const RELEASE_NOTES = '🆕 גרסה 26 עלתה. מה חדש:\n\n' +
+  '1. 🛒 רשימת הקניות עברה לדף: פתק "לקנות" (השם קבוע, אי אפשר למחוק אותו). Keep כבר לא בשימוש.\n' +
+  '2. "לקנות בטמבור מסמרים" לבוט: נכנס לפתק, מתחת לקו "טמבור".\n' +
+  '3. קווי הפרדה בכל פתק: ⋯ > "+ קו הפרדה". לוחצים על השם כדי לשנות, ▾ סוגר ופותח, ✕ מסיר (הפריטים עולים למעלה).\n' +
+  '4. /family שולח קישור לדף קניות למשפחה: רק "לקנות", בלי שאר הדף. עובד ב-iPhone וב-Android, ואפשר להוסיף למסך הבית.\n' +
+  '5. פתק התזכורות הוא פתק רגיל שאפשר להזיז (בהתחלה אחרי טווח קצר).\n' +
+  '6. בכל פתק יש למטה רק ⋯: צבע, הזזה ↑ ↓, קו הפרדה, ומחיקה.';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },
   { command: 'board', description: 'קישור לדף של פבלו' },
+  { command: 'family', description: 'קישור קניות למשפחה' },
   { command: 'queue', description: 'מה מחכה להדפסה' },
   { command: 'bills', description: 'חשבונות ממייל' },
   { command: 'clinic', description: 'שעות קליניקה החודש' },

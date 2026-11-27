@@ -23,6 +23,7 @@ function doGet(e) {
     if (q.action === 'pull') return printPull_(q);
     if (q.action === 'done') return printDone_(q);
     if (q.action === 'keepdone') return keepDone_(q); // Keep.gs
+    if (q.action === 'shop') return shopApi_(q); // Board.js: the family shopping page, through the Worker
     if (q.action === 'wixdone') return wixDone_(q); // Wix.gs
   } catch (err) { log('doGet error', q.action, String(err && err.stack || err)); return out_('error'); }
   return out_('?');
