@@ -5,6 +5,7 @@ Live web-app deployment: `AKfycbwtF-…BQwCyDVpIQ` (same URL every time, the Wor
 
 | OM version | Date | Apps Script version | Commit | Changes |
 |---|---|---|---|---|
+| v27 | 27.11.2026 | @29 | 2b0a5a8 | shopping: no duplicates, ↑↓ between dividers, dividers don't collapse; family page served from GAS (FamilyPage.html) (#23) |
 | v26 | 27.11.2026 | @28 | 0cb0a2d | shopping list in board ('לקנות' note, store dividers), /family page via Worker, movable reminders note, one ⋯ menu (#21) |
 | v25 | 27.11.2026 | @27 | cfa3c5e | board: muted repeat icon, reorder notes (#19) |
 | v24 | 27.11.2026 | @26 | 39c2d97 | board opens with private ?k= key link; /board (and '/board חדש' rotates key) (#17) |
@@ -32,3 +33,4 @@ v23: DEPLOYED 27.11.2026 16:13 Israel (Apps Script @24) by Claude via RC after P
 v24: DEPLOYED 27.11.2026 16:3x Israel (Apps Script @26) via RC after Pablo's card OK. main @39c2d97, 11 src hashes matched. TWO deployments now: bot AKfycbwtF… @26 and board AKfycbwymTX… @26 (`clasp deploy -i <board id> -V <N>` every release). Gotcha: creating the board deployment in the editor set HEAD manifest access=MYSELF; clasp push skipped -> pushed --force with ANYONE_ANONYMOUS (bot relay + print agent need anonymous; board gated by BOARD_KEY). Never create/edit deployments in the editor again without resetting access. Backup v23: C:\Users\ASUS\om-cloud-backup-v23. Rollback: clasp deploy -i <id> -V 24 (bot) / -V 25 (board).
 v25: DEPLOYED 27.11.2026 ~17:00 Israel (Apps Script @27), bot + board deployments both @27, main @cfa3c5e, 11 hashes matched, plain clasp push (manifest ANYONE_ANONYMOUS). Backup v24: C:\Users\ASUS\om-cloud-backup-v24. Rollback: -V 26.
 v26: DEPLOYED 27.11.2026 ~20:05 Israel (Apps Script @28), bot + board both @28, main @0cb0a2d, 11 hashes matched, plain push. Worker worker/worker_relay.js (adds /shop) pasted by Pablo in Cloudflare separately. Backup v25: C:\Users\ASUS\om-cloud-backup-v25. Rollback: -V 27.
+v27: DEPLOYED 27.11.2026 ~20:30 Israel (Apps Script @29), bot + board both @29, main @2b0a5a8, 12 hashes matched (new FamilyPage.html), plain push. Pablo pastes worker_relay.js after deploy. Backup v26: C:\Users\ASUS\om-cloud-backup-v26. Rollback: -V 28 (Worker then also needs the v26 version).
