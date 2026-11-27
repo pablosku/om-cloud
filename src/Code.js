@@ -320,11 +320,10 @@ function command(text) {
 
 // ---------- every minute ----------
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
-const VERSION = '27';
-const RELEASE_NOTES = '🆕 גרסה 27 עלתה. מה חדש:\n\n' +
-  '1. 🛒 אי אפשר להוסיף ל"לקנות" פריט שכבר ברשימה (גם בדף שלך וגם בדף של המשפחה).\n' +
-  '2. קווי הפרדה כבר לא נסגרים: רק שם וקו.\n' +
-  '3. לחיצה ארוכה על פריט ב"לקנות": שני חצים ↑ ↓ שמזיזים אותו לקו שמעל או מתחת (בלי מעבר לפתק אחר). גם בדף של המשפחה.';
+const VERSION = '28';
+const RELEASE_NOTES = '🆕 גרסה 28 עלתה. מה חדש:\n\n' +
+  '1. 🛒 בדף של המשפחה: לחיצה על פריט פותחת ↑ ↓ כדי להעביר אותו לחנות אחרת.\n' +
+  '2. בדף שלך: לחיצה על שם של קו הפרדה פותחת ↑ ↓ שמזיזים את כל החנות (הקו והפריטים שלו), וגם שינוי שם ומחיקה.';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },

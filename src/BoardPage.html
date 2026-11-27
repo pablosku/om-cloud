@@ -101,12 +101,10 @@ details.donebox[open] summary::before{content:"▾"}
 .pop.nm .bin{border:0;background:none;font-size:15px;padding:4px 10px;opacity:.7}
 .pop .arrow{font-size:1.15rem;min-width:52px;padding:4px 0}.pop .arrow:disabled{opacity:.3;cursor:default}
 .sep{list-style:none;display:flex;align-items:center;gap:4px;margin:10px 0 2px;color:var(--muted);font-family:var(--ui);font-size:.8rem}
-.sep .name{cursor:text;padding:0 2px;border-radius:3px}
+.sep .name{border:0;background:none;font:inherit;color:inherit;padding:4px 4px;border-radius:4px;cursor:pointer}
 .sep .ln{flex:1;border-top:1px solid var(--line);min-width:16px}
 .sep.drop .ln{border-top:2px dashed var(--accent)}
-.sep .x{font-size:.7rem}
-@media (hover:hover){.sep .x{opacity:0}.sep:hover .x{opacity:.8}}
-@media (hover:none){.sep .x{display:none}}
+.pop.nm .ren{flex-wrap:nowrap;gap:6px}.pop.nm .ren input{width:150px}
 .pop.nm .addsep{border:0;background:none;color:var(--muted);font-size:.85rem;padding:2px 6px}
 .shopnote li.item .star,.shopnote li.item .cz,.shopnote li.item .hg{display:none} /* shopping: tick and text only */
 .pal.dots{filter:none;color:var(--muted);font-size:18px;font-weight:700;padding:0 6px}
@@ -307,7 +305,7 @@ function renderLists(){
   const root=document.getElementById('lists'); root.innerHTML='';
   seq().forEach(list=>{
     if(list===CAL){const cs=CALSHEET;cs.hidden=false;root.append(cs);return}
-    const seps=list.items.filter(i=>i.k==='sep'),tasks=list.items.filter(i=>i.k!=='sep');
+    const seps=sepsOf(list),tasks=list.items.filter(i=>i.k!=='sep');
     const open=tasks.filter(i=>!i.done).sort((a,b)=>b.star-a.star), done=tasks.filter(i=>i.done);
     const inSep=i=>seps.some(x=>x.id===i.sec)?i.sec:'';
     const sec=el('section',{className:'note sheet'+(list.kind==='shop'?' shopnote':'')});
@@ -365,9 +363,9 @@ function noteMenu(sec,list,getC,setC,del){
     const up=btn('↑','הזז למעלה',()=>{closePop();moveNote(list,k-1)},'arrow'),dn=btn('↓','הזז למטה',()=>{closePop();moveNote(list,k+1)},'arrow');
     up.disabled=k<=0;dn.disabled=k>=n-1;p.append(el('div',{className:'btns'},[up,dn]));
     if(list!==CAL)p.append(el('hr'),btn('+ קו הפרדה','הוסף קו הפרדה',()=>{closePop();
-      const sp={id:rid(),t:list.kind==='shop'?'חנות':'קטע',k:'sep',sec:'',done:false,star:false,wait:null,c:'',lastC:''};list.items.push(sp);
+      const sp={id:rid(),t:list.kind==='shop'?'חנות':'קטע',k:'sep',sec:'',pos:1e6,done:false,star:false,wait:null,c:'',lastC:''};list.items.push(sp);
       send({t:'item.add',id:sp.id,list:list.id,text:sp.t,k:'sep'});renderLists();
-      const n=document.querySelector(`[data-sep="${sp.id}"] .name`);if(n){n.click();document.getSelection().selectAllChildren(n)}},'addsep'));
+      sepMenu(list,sp);setTimeout(()=>{const f=document.querySelector('#pop .ren input');if(f){f.focus();f.select()}},50)},'addsep'));
     if(del)p.append(el('hr'),btn('🗑','מחק פתק',()=>openPop(b,q=>{
       const cnt=list.items.filter(x=>x.k!=='sep').length;
       q.append(el('h3',{textContent:`למחוק את "${name()}"?`}),el('span',{textContent:cnt?`יימחקו גם ${cnt} המשימות שבו.`:'הפתק ריק.'}),
@@ -388,7 +386,7 @@ function toSep(from,i,list,sc){
 // a divider line: the label is edited like a title, ✕ removes the line (its items move up). No collapsing (Pablo 27.11).
 // ↑ ↓ move an item to the line above / below; the little menu stays open (and follows the item) until a tap elsewhere
 function secArrows(list,i){
-  const order=['',...list.items.filter(x=>x.k==='sep').map(x=>x.id)];
+  const order=['',...sepsOf(list).map(x=>x.id)];
   const go=d=>{const k=order.indexOf(order.includes(i.sec)?i.sec:''),n=k+d;if(n<0||n>=order.length)return;toSep(list,i,list,order[n]);show()};
   const show=()=>{const a=document.querySelector(`li.item[data-id="${i.id}"] .txt`);if(!a)return;
     openPop(a,p=>{p.classList.add('nm');const k=order.indexOf(order.includes(i.sec)?i.sec:'');
@@ -396,16 +394,29 @@ function secArrows(list,i){
       p.append(el('div',{className:'btns'},[up,dn]))});
     a.closest('li').scrollIntoView({block:'nearest',behavior:'smooth'})};
   show()}
+// dividers in their order (pos, set by ↑ ↓); items keep their own order under each line
+function sepsOf(list){return list.items.filter(x=>x.k==='sep').map((x,k)=>[x,k]).sort((a,b)=>((a[0].pos||0)-(b[0].pos||0))||a[1]-b[1]).map(a=>a[0])}
+// a divider line: tap its name for a small menu: ↑ ↓ moves the whole part (line + its items), rename, remove (items move up)
 function sepEl(list,sp){
   const li=el('li',{className:'sep'});li.dataset.sep=sp.id;
-  const nm=el('span',{className:'name'});editableName(nm,()=>sp.t,v=>{sp.t=v;send({t:'item.set',id:sp.id,f:{text:v}})});
-  const x=btn('✕','הסר קו',()=>{list.items=list.items.filter(y=>y!==sp);list.items.forEach(y=>{if(y.sec===sp.id)y.sec=''});send({t:'sep.del',id:sp.id});renderLists()},'ib soft x');
-  li.append(nm,el('span',{className:'ln'}),x);
-  longPress(nm,()=>openPop(nm,p=>{p.append(btn('הסר את הקו','הסר קו',()=>{closePop();x.click()},'danger'))}));
+  const nm=btn(sp.t,'אפשרויות הקו',()=>sepMenu(list,sp),'name');
+  li.append(nm,el('span',{className:'ln'}));
   li.addEventListener('dragover',e=>{if(drag&&drag.item){e.preventDefault();e.stopPropagation();li.classList.add('drop')}});
   li.addEventListener('dragleave',()=>li.classList.remove('drop'));
   li.addEventListener('drop',e=>{if(!drag||!drag.item)return;e.preventDefault();e.stopPropagation();li.classList.remove('drop');toSep(drag.list,drag.item,list,sp.id);drag=null});
   return li}
+function sepMenu(list,sp){
+  const show=()=>{const a=document.querySelector(`li.sep[data-sep="${sp.id}"] .name`);if(!a)return;
+    openPop(a,p=>{p.classList.add('nm');const ss=sepsOf(list),k=ss.indexOf(sp);
+      const mv=d=>{ss.splice(k,1);ss.splice(k+d,0,sp);ss.forEach((x,n)=>x.pos=n+1);send({t:'sep.order',ids:ss.map(x=>x.id)});renderLists();show()};
+      const up=btn('↑','הזז את החנות למעלה',()=>mv(-1),'arrow'),dn=btn('↓','הזז את החנות למטה',()=>mv(1),'arrow');up.disabled=k<=0;dn.disabled=k>=ss.length-1;
+      const inp=el('input',{type:'text',value:sp.t,enterKeyHint:'done'});inp.setAttribute('aria-label','שם הקו');
+      const save=()=>{const v=inp.value.trim();if(v&&v!==sp.t){sp.t=v;send({t:'item.set',id:sp.id,f:{text:v}});renderLists()}closePop()};
+      inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save()}});
+      p.append(el('div',{className:'btns'},[up,dn]),el('hr'),el('div',{className:'btns ren'},[inp,btn('✓','שמור שם',save,'arrow')]),el('hr'),
+        btn('🗑','הסר את הקו (הפריטים עולים למעלה)',()=>{closePop();list.items=list.items.filter(y=>y!==sp);list.items.forEach(y=>{if(y.sec===sp.id)y.sec=''});send({t:'sep.del',id:sp.id});renderLists()},'bin'))});
+    a.closest('li').scrollIntoView({block:'nearest',behavior:'smooth'})};
+  show()}
 function itemEl(list,i){
   const li=el('li',{className:'item'+(i.done?' done':'')+(i.wait&&!i.done?' waiting':'')});
   li.dataset.id=i.id;

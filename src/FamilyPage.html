@@ -41,7 +41,7 @@ li.it span{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 </style></head><body>
 <main class="note"><h1>לקנות</h1><ul id="list"><li class="msg">טוען…</li></ul>
 <form id="f" autocomplete="off"><input id="t" placeholder="+ מה לקנות?" enterkeyhint="done" aria-label="פריט חדש"><button>הוסף</button></form>
-<div class="hint" id="h">אפשר לכתוב "טמבור: ברגים" כדי להוסיף מתחת לחנות. לחיצה ארוכה על פריט מזיזה אותו ↑ ↓.</div>
+<div class="hint" id="h">אפשר לכתוב "טמבור: ברגים" כדי להוסיף מתחת לחנות. לחיצה על פריט מזיזה אותו ↑ ↓ לחנות אחרת.</div>
 <div class="bought" id="b" hidden></div><ul id="dl" hidden></ul></main>
 <script>
 const F=new URLSearchParams(location.search).get('f')||'';
@@ -62,9 +62,8 @@ function itemEl(i){
   const li=el('li','it'+(i.done?' done':''));const cb=el('input');cb.type='checkbox';cb.checked=i.done;cb.setAttribute('aria-label','נקנה: '+i.t);
   cb.addEventListener('change',()=>{i.done=cb.checked;render();api({t:'done',id:i.id,done:i.done})});
   const sp=el('span',null,i.t);li.append(cb,sp);li.dataset.id=i.id;
-  if(!i.done&&D.seps.length){ // long press (or right click): ↑ ↓ to the line above / below
-    let t=null;const start=()=>{t=setTimeout(()=>{t=null;arrows(i)},500)},stop=()=>clearTimeout(t);
-    sp.addEventListener('touchstart',start,{passive:true});sp.addEventListener('touchend',stop);sp.addEventListener('touchmove',stop,{passive:true});
+  if(!i.done&&D.seps.length){ // tap the item: ↑ ↓ moves it to the line above / below (Pablo 27.11: long press was not found)
+    sp.style.cursor='pointer';sp.addEventListener('click',()=>arrows(i));
     sp.addEventListener('contextmenu',e=>{e.preventDefault();arrows(i)})}
   return li}
 let pop=null;

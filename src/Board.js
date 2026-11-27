@@ -7,8 +7,8 @@
 // Display settings (font and size per device kind, colours, bold, quote open) live in Script Property BOARD_VIEW.
 
 const BL_H = ['id', 'name', 'order', 'note', 'kind', 'deleted'];
-const BI_H = ['id', 'list', 'text', 'done', 'star', 'color', 'last_color', 'wait_note', 'wait_since', 'created', 'updated', 'deleted', 'kind', 'sec'];
-// kind: '' = task, 'sep' = a divider line (text = its label). sec: the divider an item sits under ('' = top of the note).
+const BI_H = ['id', 'list', 'text', 'done', 'star', 'color', 'last_color', 'wait_note', 'wait_since', 'created', 'updated', 'deleted', 'kind', 'sec', 'pos'];
+// kind: '' = task, 'sep' = a divider line (text = its label; pos = its place among the lines, set by ↑ ↓). sec: the divider an item sits under ('' = top of the note).
 // Shopping (27.11, replaces Google Keep): the note of kind 'shop' ("לקנות") is the family list. Its name is fixed and it
 // cannot be deleted. The family sees only it, on a page the Cloudflare Worker serves (shopApi_ below, key FAMILY_KEY).
 const BQ_H = ['sentence', 'commentary', 'source'];
@@ -65,7 +65,7 @@ function boardGet(k) {
       id: String(r[BI.id]), t: String(r[BI.text]), done: r[BI.done] === true, star: r[BI.star] === true,
       c: String(r[BI.color] || ''), lastC: String(r[BI.last_color] || ''),
       wait: r[BI.wait_since] ? { note: String(r[BI.wait_note] || ''), since: dstr_(r[BI.wait_since]) } : null,
-      k: String(r[BI.kind] || ''), sec: String(r[BI.sec] || '')
+      k: String(r[BI.kind] || ''), sec: String(r[BI.sec] || ''), pos: Number(r[BI.pos] || 0)
     });
   });
   return { lists, cal: boardCal_(), quote: boardQuote_(), view: JSON.parse(prop('BOARD_VIEW') || '{}'), today: dstr_(new Date()) };
@@ -103,7 +103,7 @@ function boardDo_(op) {
   const now = new Date();
   switch (op.t) {
     case 'item.add': {
-      boardItemsTab_().appendRow([op.id, op.list, String(op.text).slice(0, 500), false, false, '', '', '', '', now, now, '', op.k === 'sep' ? 'sep' : '', op.sec || '']);
+      boardItemsTab_().appendRow([op.id, op.list, String(op.text).slice(0, 500), false, false, '', '', '', '', now, now, '', op.k === 'sep' ? 'sep' : '', op.sec || '', op.k === 'sep' ? 1e6 : '']); // a new line goes last
       return;
     }
     case 'item.set': { // fields: text, done, star, c, lastC, wait (null | {note, since}), list
@@ -120,6 +120,12 @@ function boardDo_(op) {
       return rowSet_('board_items', BI_H, op.id, set);
     }
     case 'item.del': return rowSet_('board_items', BI_H, op.id, { deleted: now });
+    case 'sep.order': { // the lines of one note, top to bottom
+      const t = boardItemsTab_(), v = t.getDataRange().getValues(), pos = {};
+      (op.ids || []).forEach((id, k) => { pos[id] = k + 1; });
+      v.forEach((r, i) => { if (i && pos[r[BI.id]]) t.getRange(i + 1, BI.pos + 1).setValue(pos[r[BI.id]]); });
+      return;
+    }
     case 'sep.del': { // remove a divider: its items move up to the top of the note (not deleted)
       const t = boardItemsTab_(), v = t.getDataRange().getValues();
       v.forEach((r, i) => { if (i && String(r[BI.sec]) === String(op.id)) t.getRange(i + 1, BI.sec + 1).setValue(''); });
@@ -211,7 +217,8 @@ function boardShopList_() {
 function shopRead_() {
   const id = boardShopList_(), v = boardItemsTab_().getDataRange().getValues().slice(1)
     .filter(r => r[BI.id] && !r[BI.deleted] && String(r[BI.list]) === id);
-  const seps = v.filter(r => r[BI.kind] === 'sep').map(r => ({ id: String(r[BI.id]), t: String(r[BI.text]) }));
+  const seps = v.filter(r => r[BI.kind] === 'sep').map((r, k) => ({ id: String(r[BI.id]), t: String(r[BI.text]), p: Number(r[BI.pos] || 0), k }))
+    .sort((a, b) => (a.p - b.p) || (a.k - b.k)).map(x => ({ id: x.id, t: x.t }));
   const ok = {}; seps.forEach(x => ok[x.id] = 1);
   const items = v.filter(r => r[BI.kind] !== 'sep').map(r => ({ id: String(r[BI.id]), t: String(r[BI.text]), done: r[BI.done] === true,
     sec: ok[r[BI.sec]] ? String(r[BI.sec]) : '' }));
@@ -225,7 +232,7 @@ function shopAdd_(names, store, secId) {
   let sec = cur.seps.some(x => x.id === secId) ? secId : '';
   if (!sec && store) {
     const s = cur.seps.find(x => norm(x.t) === norm(store));
-    if (s) sec = s.id; else { sec = bid_(); t.appendRow([sec, id, norm(store).slice(0, 60), false, false, '', '', '', '', now, now, '', 'sep', '']); }
+    if (s) sec = s.id; else { sec = bid_(); t.appendRow([sec, id, norm(store).slice(0, 60), false, false, '', '', '', '', now, now, '', 'sep', '', 1e6]); }
   }
   const open = {}; cur.items.forEach(x => { if (!x.done) open[norm(x.t)] = 1; });
   const res = { added: [], dup: [] };
