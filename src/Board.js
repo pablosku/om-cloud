@@ -40,7 +40,8 @@ function boardPage_(q) {
   return t.evaluate()
     .setTitle('הדף של פבלו')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+    // ALLOWALL (27.11): lets the board be shown inside a frame (test: hide Google's top banner). The page still needs the key.
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 // ---------- read ----------
