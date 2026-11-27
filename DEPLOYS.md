@@ -5,6 +5,7 @@ Live web-app deployment: `AKfycbwtF-…BQwCyDVpIQ` (same URL every time, the Wor
 
 | OM version | Date | Apps Script version | Commit | Changes |
 |---|---|---|---|---|
+| v25 | 27.11.2026 | @27 | cfa3c5e | board: muted repeat icon, reorder notes (#19) |
 | v24 | 27.11.2026 | @26 | 39c2d97 | board opens with private ?k= key link; /board (and '/board חדש' rotates key) (#17) |
 | v23 | 27.11.2026 | @24 | 984e1a2 | /klinka -> /clinic (this month); repeat intervals (#12); /bills label 'הדפסה'; board page (#14, BoardPage.html #15) |
 | v22 | 26.11.2026 | @23 | 5993cc4 | Wix: trash the Google Meet recording mail after a good upload |
@@ -28,3 +29,4 @@ v21: DEPLOYED 26.11.2026 22:38 Israel (Apps Script @22) by Claude via RC after P
 v22: DEPLOYED 26.11.2026 23:06 Israel (Apps Script @23): Wix.js trashes the Meet mail after a good upload, main @5993cc4 (PR #11). Rollback: clasp deploy -i <id> -V 22.
 v23: DEPLOYED 27.11.2026 16:13 Israel (Apps Script @24) by Claude via RC after Pablo's OK (decision card + "DEPLOY"). main @984e1a2: all 11 src files SHA-256 matched. First push failed: Board.js + Board.html same name -> renamed BoardPage.html (#15). Backup of v22 files: C:\Users\ASUS\om-cloud-backup-v22. Laptop Claude Code blocks clasp deploy in auto mode; Pablo's typed OK let it run. Board web-app deployment (owner only) still to be created by Pablo in the editor. Rollback: clasp deploy -i <id> -V 23.
 v24: DEPLOYED 27.11.2026 16:3x Israel (Apps Script @26) via RC after Pablo's card OK. main @39c2d97, 11 src hashes matched. TWO deployments now: bot AKfycbwtF… @26 and board AKfycbwymTX… @26 (`clasp deploy -i <board id> -V <N>` every release). Gotcha: creating the board deployment in the editor set HEAD manifest access=MYSELF; clasp push skipped -> pushed --force with ANYONE_ANONYMOUS (bot relay + print agent need anonymous; board gated by BOARD_KEY). Never create/edit deployments in the editor again without resetting access. Backup v23: C:\Users\ASUS\om-cloud-backup-v23. Rollback: clasp deploy -i <id> -V 24 (bot) / -V 25 (board).
+v25: DEPLOYED 27.11.2026 ~17:00 Israel (Apps Script @27), bot + board deployments both @27, main @cfa3c5e, 11 hashes matched, plain clasp push (manifest ANYONE_ANONYMOUS). Backup v24: C:\Users\ASUS\om-cloud-backup-v24. Rollback: -V 26.
