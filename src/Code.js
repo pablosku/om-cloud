@@ -319,7 +319,7 @@ function command(text) {
 const VERSION = '26';
 const RELEASE_NOTES = '🆕 גרסה 26 עלתה. מה חדש בדף של פבלו:\n\n' +
   '1. פתק התזכורות הוא פתק רגיל שאפשר להזיז. כברירת מחדל הוא בא אחרי טווח קצר.\n' +
-  '2. בכל פתק יש למטה רק ⋯. הוא פותח תפריט עם צבע, מקום (קודם / אחר כך) ומחיקה. במחשב אפשר גם לגרור את ⋯ כדי להזיז את הפתק.';
+  '2. בכל פתק יש למטה רק ⋯. הוא פותח תפריט עם צבע, הזזה (חץ למעלה / למטה) ומחיקה. במחשב אפשר גם לגרור את ⋯ כדי להזיז את הפתק.';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },

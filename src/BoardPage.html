@@ -94,6 +94,7 @@ details.donebox[open] summary::before{content:"▾"}
 .clear{border:0;background:none;color:var(--muted);font-size:.8rem;margin-inline-start:auto;padding:2px 6px;text-decoration:underline}
 .newlist{border:1.5px dashed var(--line);border-radius:16px;min-height:120px;display:flex;align-items:center;justify-content:center;color:var(--muted);background:transparent;font-size:1rem}
 .pal{position:absolute;left:10px;bottom:6px;border:0;background:none;padding:2px 4px;font-size:15px;line-height:1;opacity:0;filter:grayscale(.4);border-radius:6px}
+.pop .arrow{font-size:1.15rem;min-width:52px;padding:4px 0}.pop .arrow:disabled{opacity:.3;cursor:default}
 .pal.dots{filter:none;color:var(--muted);font-size:18px;font-weight:700;padding:0 6px}
 .pal.dots[draggable="true"]{cursor:grab}
 @media (pointer:coarse){.pal.dots{left:2px;bottom:0;padding:8px 14px;font-size:20px}}
@@ -335,9 +336,9 @@ function noteMenu(sec,list,getC,setC,del){
   const build=p=>{const k=seq().indexOf(list),n=seq().length;
     p.append(el('h3',{textContent:'צבע הפתק'}),swatches(NOTE_COLORS,getC,c=>{setC(c);closePop()},'var(--note-def,var(--note-auto))'));
     const mv=el('div',{className:'btns'});
-    if(k>0)mv.append(btn('→ קודם','הזז קודם',()=>{closePop();moveNote(list,k-1)}));
-    if(k<n-1)mv.append(btn('אחר כך ←','הזז אחר כך',()=>{closePop();moveNote(list,k+1)}));
-    p.append(el('h3',{textContent:'מקום'}),mv);
+    const up=btn('↑','הזז למעלה',()=>{closePop();moveNote(list,k-1)},'arrow'),dn=btn('↓','הזז למטה',()=>{closePop();moveNote(list,k+1)},'arrow');
+    up.disabled=k<=0;dn.disabled=k>=n-1;mv.append(up,dn);
+    p.append(el('h3',{textContent:'הזזה'}),mv);
     if(del)p.append(btn('🗑 מחק פתק','מחק פתק',()=>openPop(b,q=>{
       q.append(el('h3',{textContent:`למחוק את "${name()}"?`}),el('span',{textContent:list.items.length?`יימחקו גם ${list.items.length} המשימות שבו.`:'הפתק ריק.'}),
         el('div',{className:'btns'},[btn('ביטול','ביטול',closePop,'primary keep'),btn('מחק','מחק',()=>{closePop();del()},'danger')]));
