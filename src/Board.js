@@ -249,6 +249,11 @@ function shopApi_(q) {
   } finally { lock.releaseLock(); }
   return json_(shopRead_());
 }
+// doGet ?s=URL_SECRET&action=shoppage&f=FAMILY_KEY: the family page as plain HTML text (the Worker serves it)
+function shopPage_(q) {
+  if (!prop('FAMILY_KEY') || q.f !== prop('FAMILY_KEY')) return out_('no');
+  return ContentService.createTextOutput(HtmlService.createHtmlOutputFromFile('FamilyPage').getContent());
+}
 // the family link: the Worker's address (from the Telegram webhook) + /shop?f=FAMILY_KEY. "/family חדש" makes a new key.
 function familyLink_(fresh) {
   if (fresh || !prop('FAMILY_KEY')) P.setProperty('FAMILY_KEY', Utilities.getUuid().replace(/-/g, ''));
