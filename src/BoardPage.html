@@ -101,13 +101,12 @@ details.donebox[open] summary::before{content:"▾"}
 .pop.nm .bin{border:0;background:none;font-size:15px;padding:4px 10px;opacity:.7}
 .pop .arrow{font-size:1.15rem;min-width:52px;padding:4px 0}.pop .arrow:disabled{opacity:.3;cursor:default}
 .sep{list-style:none;display:flex;align-items:center;gap:4px;margin:10px 0 2px;color:var(--muted);font-family:var(--ui);font-size:.8rem}
-.sep .ar{border:0;background:none;color:var(--muted);font-size:.7rem;padding:2px 4px;width:20px}
-.sep .name{cursor:text;padding:0 2px;border-radius:3px}.sep .cnt{font-size:.75rem;opacity:.7}
+.sep .name{cursor:text;padding:0 2px;border-radius:3px}
 .sep .ln{flex:1;border-top:1px solid var(--line);min-width:16px}
 .sep.drop .ln{border-top:2px dashed var(--accent)}
 .sep .x{font-size:.7rem}
 @media (hover:hover){.sep .x{opacity:0}.sep:hover .x{opacity:.8}}
-@media (hover:none){.sep .x{display:none}.sep .ar{width:28px;padding:6px}}
+@media (hover:none){.sep .x{display:none}}
 .pop.nm .addsep{border:0;background:none;color:var(--muted);font-size:.85rem;padding:2px 6px}
 .shopnote li.item .star,.shopnote li.item .cz,.shopnote li.item .hg{display:none} /* shopping: tick and text only */
 .pal.dots{filter:none;color:var(--muted);font-size:18px;font-weight:700;padding:0 6px}
@@ -319,10 +318,12 @@ function renderLists(){
     if(shop)nm.textContent=list.name; // "לקנות" is fixed: no rename, no delete
     else editableName(nm,()=>list.name,v=>{list.name=v;send({t:'list.set',id:list.id,name:v})});
     const ul=el('ul');open.filter(i=>!inSep(i)).forEach(i=>ul.append(itemEl(list,i)));
-    seps.forEach(sp=>{ul.append(sepEl(list,sp));if(!(V.coll||{})[sp.id])open.filter(i=>inSep(i)===sp.id).forEach(i=>ul.append(itemEl(list,i)))});
+    seps.forEach(sp=>{ul.append(sepEl(list,sp));open.filter(i=>inSep(i)===sp.id).forEach(i=>ul.append(itemEl(list,i)))});
     const inp=el('input',{id:'add-'+list.id,placeholder:shop?'+ פריט חדש':'+ משימה חדשה',type:'text',enterKeyHint:'enter'});
     inp.setAttribute('aria-label','הוסף ל'+list.name);
     inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&inp.value.trim()){let t=inp.value.trim(),sc='';const m=t.match(/^([^:]{1,30}):\s*(.+)$/),hit=m&&seps.find(x=>x.t.trim()===m[1].trim());if(hit){sc=hit.id;t=m[2].trim()} // "טמבור: מסמרים" goes under that line
+      const same=x=>x.k!=='sep'&&!x.done&&x.t.replace(/\s+/g,' ').trim()===t.replace(/\s+/g,' ').trim();
+      if(shop&&list.items.some(same)){toast('כבר ברשימה: '+t);inp.value='';return} // shopping: no double "חלב"
       const it={id:rid(),t,star:false,done:false,wait:null,c:'',lastC:'',k:'',sec:sc};list.items.push(it);send({t:'item.add',id:it.id,list:list.id,text:it.t,sec:sc});renderLists();document.getElementById('add-'+list.id).focus()}});
     const h2=el('h2',{},[nm]);
     h2.addEventListener('dragover',e=>{if(drag&&drag.item){e.preventDefault();e.stopPropagation()}});
@@ -384,14 +385,12 @@ function toSep(from,i,list,sc){
   if(from!==list){from.items=from.items.filter(x=>x!==i);list.items.push(i);i.sec=sc;send({t:'item.set',id:i.id,f:{list:list.id,sec:sc}})}
   else if((i.sec||'')!==sc){i.sec=sc;send({t:'item.set',id:i.id,f:{sec:sc}})}
   renderLists()}
-// a divider line: ▾ opens / closes its part, the label is edited like a title, ✕ removes the line (its items move up)
+// a divider line: the label is edited like a title, ✕ removes the line (its items move up). No collapsing (Pablo 27.11).
 function sepEl(list,sp){
-  const shut=!!(V.coll||{})[sp.id],n=list.items.filter(x=>x.k!=='sep'&&!x.done&&x.sec===sp.id).length;
-  const li=el('li',{className:'sep'+(shut?' shut':'')});li.dataset.sep=sp.id;
-  const ar=btn(shut?'◂':'▾',shut?'פתח':'סגור',()=>{V.coll=Object.assign({},V.coll);if(shut)delete V.coll[sp.id];else V.coll[sp.id]=1;saveView();renderLists()},'ar');
+  const li=el('li',{className:'sep'});li.dataset.sep=sp.id;
   const nm=el('span',{className:'name'});editableName(nm,()=>sp.t,v=>{sp.t=v;send({t:'item.set',id:sp.id,f:{text:v}})});
   const x=btn('✕','הסר קו',()=>{list.items=list.items.filter(y=>y!==sp);list.items.forEach(y=>{if(y.sec===sp.id)y.sec=''});send({t:'sep.del',id:sp.id});renderLists()},'ib soft x');
-  li.append(ar,nm);if(shut&&n)li.append(el('span',{className:'cnt',textContent:String(n)}));li.append(el('span',{className:'ln'}),x);
+  li.append(nm,el('span',{className:'ln'}),x);
   longPress(nm,()=>openPop(nm,p=>{p.append(btn('הסר את הקו','הסר קו',()=>{closePop();x.click()},'danger'))}));
   li.addEventListener('dragover',e=>{if(drag&&drag.item){e.preventDefault();e.stopPropagation();li.classList.add('drop')}});
   li.addEventListener('dragleave',()=>li.classList.remove('drop'));

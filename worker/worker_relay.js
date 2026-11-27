@@ -145,6 +145,8 @@ function render(err){
 }
 $('f').addEventListener('submit',e=>{e.preventDefault();const v=$('t').value.trim();if(!v)return;$('t').value='';
   let text=v,sec='';const m=v.match(/^([^:]{1,30}):\\s*(.+)$/),hit=m&&D&&D.seps.find(s=>s.t.trim()===m[1].trim());if(hit){sec=hit.id;text=m[2].trim()}
+  const n=x=>x.replace(/\\s+/g,' ').trim();
+  if(D&&D.items.some(i=>!i.done&&n(i.t)===n(text))){toast('כבר ברשימה: '+text);return} // no double "חלב"
   if(D)D.items.push({id:'tmp',t:text,done:false,sec});render();api({t:'add',text,sec})});
 api({t:'get'});
 setInterval(()=>{if(!busy&&!document.hidden&&document.activeElement!==$('t'))api({t:'get'})},20000);
