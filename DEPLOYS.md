@@ -5,6 +5,8 @@ Live web-app deployment: `AKfycbwtF-…BQwCyDVpIQ` (same URL every time, the Wor
 
 | OM version | Date | Apps Script version | Commit | Changes |
 |---|---|---|---|---|
+| v22 | 26.11.2026 | @23 | 5993cc4 | Wix: trash the Google Meet recording mail after a good upload |
+| v21 | 26.11.2026 | @22 | 95315c6 | Wix upload from the Meet recording mail; Keep item fix; print_agent 3.2 (OneDrive retry) |
 | v20 | 26.11.2026 | @21 | dad29ea | Keep shopping list (add only, via laptop gkeepapi); Mei Modiin print asks first; /bills in menu (BOT_COMMANDS); Reminders.js split; print agent v3 |
 | v19 | 26.11.2026 | @20 | d7b654b | reminders: "ב15" = hour + fixParse_; Mei Avivim via laptop fetch jobs; pdfclean keeps template images' dark parts; print agent v2 |
 | v18 | 26.11.2026 | @19 | 54cd604 | bills from email: labels OM/חשבונות -> OM/טופל, Mei Avivim -> Telegram, Mei Modiin -> print |
@@ -21,4 +23,4 @@ v18/v19: Bills.js, Code.js matched src/ hashes. Print.js on the laptop = LIVE fi
 Laptop: print_agent.py v2 + pdfclean.py from laptop/ at d7b654b (backups *.v18.bak in the Secretary folder).
 v20: all 8 src/*.js copied byte-for-byte from dad29ea into the clasp folder (live Print.js/Reports.js differed from src/ only in whitespace, so src/ is now the live code; the earlier Print/Reports TODO is closed). Backup of v19 files: C:\Users\ASUS\om-cloud-backup-v19. Laptop: print_agent.py v3 (backup print_agent.v2.py.bak), keep_ops.py + keep_token.py, gkeepapi 0.17.1. Rollback: clasp deploy -i <id> -V 20.
 v21: DEPLOYED 26.11.2026 22:38 Israel (Apps Script @22) by Claude via RC after Pablo's in-thread OK. main @95315c6 (PR #10 incl. #9): all 9 src/*.js SHA-256 matched (new Wix.js). Backup of v20 files: C:\Users\ASUS\om-cloud-backup-v20. Laptop: print_agent.py 3.2 (backup print_agent.v3.py.bak); ZOOM\wix_upload.js from laptop/ (backup wix_upload_pre_om.js, keys in ZOOM\wix.env). Dry run `-b 2026-11-25` -> exit 1 "no recording", nothing uploaded. No Windows scheduled task runs run_upload.bat. Rollback: clasp deploy -i <id> -V 21.
-v22: DEPLOYED 26.11.2026 23:06 Israel (Apps Script @23): Wix.js trashes the Meet mail after a good upload (commit 5993cc4). (line added later, from the project notes)
+v22: DEPLOYED 26.11.2026 23:06 Israel (Apps Script @23): Wix.js trashes the Meet mail after a good upload, main @5993cc4 (PR #11). Rollback: clasp deploy -i <id> -V 22.
