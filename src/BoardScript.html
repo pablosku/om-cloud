@@ -346,19 +346,24 @@ function renderCal(){
 }
 editableName(CALSHEET.querySelector('#calName'),()=>V.calName||'תזכורות קרובות',v=>{V.calName=v;saveView()});
 // "+ תזכורת חדשה" (Pablo 28.11): text, day, time, repeat. OM saves it to the calendar and confirms in Telegram.
-const REPEATS=[['','בלי חזרה'],['daily','כל יום'],['workdays','ימי חול (א׳–ה׳)'],['weekly','כל שבוע'],['monthly','כל חודש'],['yearly','כל שנה']];
+// minimal (Pablo 28.11): no labels; day shown "שבת, 28.11.26", time "09:00" (the phone's own pickers open on tap); repeat: one-time or every day/week/month/year
+const REPEATS=[['','חד פעמי'],['daily','כל יום'],['weekly','כל שבוע'],['monthly','כל חודש'],['yearly','כל שנה']];
+const fmtDay=iso=>{const d=new Date(iso+'T12:00');return new Intl.DateTimeFormat('he-IL',{weekday:'long'}).format(d).replace('יום ','')+', '+pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+String(d.getFullYear()).slice(2)};
 function remNewPop(anchor){
   openPop(anchor,p=>{
     p.append(el('h3',{textContent:'תזכורת חדשה'}));
-    const tx=el('input',{id:'n-text',type:'text',placeholder:'מה להזכיר?',enterKeyHint:'next'});
-    const nx=new Date(Date.now()+36e5);nx.setMinutes(0);
+    const tx=el('input',{id:'n-text',type:'text',placeholder:'מה להזכיר?',enterKeyHint:'done'});tx.setAttribute('aria-label','מה להזכיר');
+    const nx=new Date(Date.now()+36e5);
     const dt=el('input',{id:'n-date',type:'date',value:isoDay(nx)}),tm=el('input',{id:'n-time',type:'time',value:pad(nx.getHours())+':00',step:300});
-    const rp=el('select',{id:'n-rep'});REPEATS.forEach(([v,n])=>rp.append(el('option',{value:v,textContent:n})));
-    const q=el('div',{className:'quick'});
-    [['היום',()=>{dt.value=dayISO(0)}],['מחר',()=>{dt.value=dayISO(1)}],['עוד שבוע',()=>{dt.value=dayISO(7)}]].forEach(([n,f])=>q.append(btn(n,n,f)));
-    p.append(el('label',{},['מה',tx]),el('label',{},['יום',dt]),q,el('label',{},['שעה',tm]),el('label',{},['חזרה',rp]));
+    dt.setAttribute('aria-label','יום');tm.setAttribute('aria-label','שעה');
+    const ds=el('span',{className:'shown'}),ts=el('span',{className:'shown'});
+    const show=()=>{ds.textContent=dt.value?fmtDay(dt.value):'';ts.textContent=tm.value||''};show();
+    dt.addEventListener('change',show);tm.addEventListener('change',show);dt.addEventListener('input',show);tm.addEventListener('input',show);
+    const rp=el('select',{id:'n-rep'});rp.setAttribute('aria-label','חזרה');REPEATS.forEach(([v,n])=>rp.append(el('option',{value:v,textContent:n})));
+    p.append(tx,el('div',{className:'row2'},[el('label',{className:'pick'},[ds,dt]),el('label',{className:'pick tm'},[ts,tm])]),rp);
     const save=()=>{const t=tx.value.trim();
       if(!t){toast('מה להזכיר?');tx.focus();return}
+      if(!dt.value||!tm.value){toast('חסר יום או שעה');return}
       if(!rp.value&&new Date(dt.value+'T'+tm.value)<new Date()){toast('הזמן הזה כבר עבר');return}
       ok.disabled=true;ok.textContent='שומר…';
       google.script.run.withSuccessHandler(r=>{
@@ -366,7 +371,7 @@ function remNewPop(anchor){
         else{ok.disabled=false;ok.textContent='שמור';toast((r&&r.q)||'לא נשמר',6000)}})
         .withFailureHandler(err=>{ok.disabled=false;ok.textContent='שמור';toast('לא הצלחתי לשמור: '+(err&&err.message||err),6000)})
         .boardOp({t:'rem.add',text:t,date:dt.value,time:tm.value,repeat:rp.value},KEY)};
-    tx.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save()}});
+    tx.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();tx.blur()}});
     const ok=btn('שמור','שמור',save,'primary');p.append(el('div',{className:'btns'},[ok]));
     setTimeout(()=>tx.focus(),0)})}
 document.getElementById('remAdd').addEventListener('click',e=>remNewPop(e.currentTarget));

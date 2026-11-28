@@ -59,11 +59,13 @@ const mock = (() => {
   await p.click(tk + ' h2 .fold'); await p.click('#calh .fold');
   await p.click('#remAdd'); await p.click('#pop button[aria-label="שמור"]');
   assert(await p.textContent('#toast') === 'מה להזכיר?', 'new reminder: text is required');
-  await p.fill('#n-text', 'להתקשר לרופא'); await p.click('#pop button[aria-label="מחר"]'); await p.fill('#n-time', '09:00'); await p.selectOption('#n-rep', 'weekly');
+  await p.fill('#n-text', 'להתקשר לרופא'); await p.fill('#n-date', new Date(Date.now() + 864e5).toISOString().slice(0, 10)); await p.fill('#n-time', '09:00'); await p.selectOption('#n-rep', 'weekly');
   await p.click('#pop button[aria-label="שמור"]'); await p.waitForTimeout(100);
   const ro = await p.evaluate(() => window.__ops.filter(o => o.t === 'rem.add').pop());
   assert(ro.text === 'להתקשר לרופא' && ro.time === '09:00' && ro.repeat === 'weekly' && ro.date > new Date().toISOString().slice(0, 10), 'new reminder form sends text, day, time, repeat');
   assert((await p.textContent('#toast')).startsWith('✓ נקבעה') && await p.isHidden('#pop'), 'new reminder saved, form closed');
+  await p.click('#remAdd'); assert(/^(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת), \d\d\.\d\d\.\d\d$/.test(await p.textContent('#pop .pick .shown')), 'day shown as "שבת, 28.11.26"');
+  assert(/^\d\d:\d\d$/.test(await p.textContent('#pop .pick.tm .shown')) && await p.$eval('#n-rep', x => x.options[x.selectedIndex].text) === 'חד פעמי', 'time HH:MM, repeat default one-time'); await p.click('#today');
   assert(await p.$$eval('#cal li.day .ln', x => x.length) === 2, 'reminder days are lines');
 
   // family page
