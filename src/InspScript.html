@@ -12,6 +12,7 @@ const CH=[[1,'פרק 1 · פילוסופיה'],[2,'פרק 2 · פרקטיקה'],
 const STAGE=['פרק 1: איך אתה מבין','דיון','איפה זה פוגש אותך','פרקים 2–3'];
 const ls=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}};
 const today=()=>isoDay(new Date());
+let waitEl=null, waitSt=null, waitT0=0, waitPoll=null;
 let D=null, past=[], tried=null, mlist=[], state='load', busy=false, failed=false, full=false, open={}, rec=null;
 try{const c=JSON.parse(ls(IC));if(c&&c.day&&c.day.date===today()){D=c.day;past=c.past||[];state='ok'}}catch(e){}
 
@@ -89,7 +90,7 @@ function inspRender(){
     if(D.question)body.append(el('p',{className:'ask',textContent:D.question}));
     const chat=el('div',{className:'chat'});
     D.chat.forEach(m=>{chat.append(bubble(m));if(m.fb)chat.append(rateBox())});
-    if(busy)chat.append(el('div',{className:'b om wait',textContent:'חושב…'}));
+    if(busy){waitEl=el('div',{className:'b om wait'});waitTxt();chat.append(waitEl)}
     else if(failed){const f=el('div',{className:'b om fail',textContent:'לא הגיעה תשובה.'});f.append(btn('נסה שוב','נסה שוב',()=>sendIt(true)));chat.append(f)}
     body.append(chat)}
   box.hidden=!D;up.disabled=busy;
@@ -108,7 +109,7 @@ function renderPast(){
       if(!d)o.append(el('span',{className:'src',textContent:'טוען…'}));
       else{o.append(el('span',{className:'src',textContent:d.src}),el('p',{className:'story',textContent:d.story}));d.chat.forEach(m=>o.append(bubble(m)))}
       pastEl.append(o)}})}
-function grow(){ta.style.height='auto';ta.style.height=(ta.scrollHeight+2)+'px'}
+function grow(){box.classList.toggle('empty',!ta.value.trim());ta.style.height='auto';ta.style.height=(ta.scrollHeight+2)+'px'}
 const cacheIt=()=>ls(IC,JSON.stringify({day:D,past}));
 
 /* ---------- server ---------- */
@@ -124,10 +125,19 @@ function sendIt(retry){
   if(busy||!D)return;const t=ta.value.trim();if(!retry&&!t){ta.focus();return}
   if(rec)rec.stop();
   if(!retry){D.chat.push({r:'me',t});ta.value='';ls(DRAFT,'');grow()}
-  busy=true;failed=false;inspRender();scrollEnd();
+  busy=true;failed=false;waitSt=null;waitT0=Date.now();inspRender();scrollEnd();
+  clearInterval(waitPoll);waitPoll=setInterval(()=>{if(!busy){clearInterval(waitPoll);return}waitTxt();
+    google.script.run.withSuccessHandler(s=>{waitSt=s;waitTxt()}).inspStatus(KEY)},3000);
   google.script.run.withSuccessHandler(r=>{busy=false;
     if(r&&r.day)D=r.day;if(r&&r.tried)tried=r.tried;failed=!r||!!r.err;cacheIt();inspRender();scrollEnd()})
   .withFailureHandler(()=>{busy=false;failed=true;inspRender()}).inspSend(retry?'':t,KEY)}
+// the waiting bubble: who is thinking, and when Google was busy, that we moved on to the next model
+function waitTxt(){if(!waitEl)return;const s=waitSt,sec=Math.round((Date.now()-waitT0)/1000),nm=m=>String(m||'').replace(/^gemini-/,'');
+  let t='חושב…';
+  if(s&&s.m){const p=s.prev,busyP=p&&(p.c===503||p.c===429||p.c>=500||p.c==='net');
+    t=busyP?`Google עמוסה (${nm(p.m)}), מנסה ${nm(s.m)}…`:`${nm(s.m)} חושב…`}
+  if(sec>=20)t+=` · ${sec} שנ׳`;if(sec>=60)t+=' · עמוס כרגע, ממתין';
+  waitEl.textContent=t}
 function scrollEnd(){const last=body.querySelector('.chat>:last-child');if(!last)return;
   if(full)body.scrollTop=body.scrollHeight;else last.scrollIntoView({block:'nearest',behavior:'smooth'})}
 
