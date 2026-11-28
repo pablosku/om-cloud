@@ -23,7 +23,7 @@ const mock = (() => {
     quote: { s: 'יוגה היא שוויון נפש.', c: 'פרשנות', src: 'גיטה' }, view: { calPos: 2 }, today: d };
   function R() { let ok; const o = { withSuccessHandler(x) { ok = x; return o; }, withFailureHandler() { return o; },
     boardGet() { setTimeout(() => ok(JSON.parse(JSON.stringify(data))), 10); },
-    boardOp(op) { ops.push(op); setTimeout(() => ok(op.t === 'rem.add' ? (/מחר/.test(op.text) ? { ok: 'להתקשר לרופא', when: t + ' 09:00' } : { q: 'מתי להזכיר?' }) : 'ok'), 10); } }; return o; }
+    boardOp(op) { ops.push(op); setTimeout(() => ok(op.t === 'rem.add' ? { ok: op.text } : 'ok'), 10); } }; return o; }
   window.google = { script: { get run() { return R(); } } };
 }).toString();
 
@@ -57,10 +57,13 @@ const mock = (() => {
   await p.click(tk + ' h2 .fold'); await p.click('#calh .fold');
   assert(await p.$eval(tk, x => x.classList.contains('folded')) && await p.$eval('#calSheet', x => x.classList.contains('folded')), '+/− folds a note and the reminders');
   await p.click(tk + ' h2 .fold'); await p.click('#calh .fold');
-  await p.fill('#remAdd', 'משהו'); await p.press('#remAdd', 'Enter'); await p.waitForTimeout(100);
-  assert(await p.textContent('#toast') === 'מתי להזכיר?', 'new reminder: OM question shown');
-  await p.fill('#remAdd', 'מחר ב9 להתקשר לרופא'); await p.press('#remAdd', 'Enter'); await p.waitForTimeout(100);
-  assert((await p.textContent('#toast')).startsWith('✓ נקבעה') && await p.inputValue('#remAdd') === '', 'new reminder saved');
+  await p.click('#remAdd'); await p.click('#pop button[aria-label="שמור"]');
+  assert(await p.textContent('#toast') === 'מה להזכיר?', 'new reminder: text is required');
+  await p.fill('#n-text', 'להתקשר לרופא'); await p.click('#pop button[aria-label="מחר"]'); await p.fill('#n-time', '09:00'); await p.selectOption('#n-rep', 'weekly');
+  await p.click('#pop button[aria-label="שמור"]'); await p.waitForTimeout(100);
+  const ro = await p.evaluate(() => window.__ops.filter(o => o.t === 'rem.add').pop());
+  assert(ro.text === 'להתקשר לרופא' && ro.time === '09:00' && ro.repeat === 'weekly' && ro.date > new Date().toISOString().slice(0, 10), 'new reminder form sends text, day, time, repeat');
+  assert((await p.textContent('#toast')).startsWith('✓ נקבעה') && await p.isHidden('#pop'), 'new reminder saved, form closed');
   assert(await p.$$eval('#cal li.day .ln', x => x.length) === 2, 'reminder days are lines');
 
   // family page

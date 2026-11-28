@@ -345,14 +345,31 @@ function renderCal(){
   });
 }
 editableName(CALSHEET.querySelector('#calName'),()=>V.calName||'תזכורות קרובות',v=>{V.calName=v;saveView()});
-// "+ תזכורת חדשה": the same words as to OM. OM reads them (Gemini), saves to the calendar and confirms in Telegram too.
-{const ri=document.getElementById('remAdd');
-  ri.addEventListener('keydown',e=>{if(e.key!=='Enter'||!ri.value.trim()||ri.disabled)return;const t=ri.value.trim();ri.disabled=true;document.getElementById('sync').textContent='שומר…';
-    const end=()=>{ri.disabled=false;document.getElementById('sync').textContent=''};
-    google.script.run.withSuccessHandler(r=>{end();
-      if(r&&r.ok){ri.value='';toast('✓ נקבעה תזכורת: '+r.ok+' · '+r.when.slice(8,10)+'.'+r.when.slice(5,7)+' '+r.when.slice(11));load(true)}
-      else{toast((r&&r.q)||'לא הבנתי. נסה למשל: מחר ב-9 להתקשר לרופא',6000);ri.focus()}})
-      .withFailureHandler(err=>{end();toast('לא הצלחתי לשמור: '+(err&&err.message||err),6000)}).boardOp({t:'rem.add',text:t},KEY)})}
+// "+ תזכורת חדשה" (Pablo 28.11): text, day, time, repeat. OM saves it to the calendar and confirms in Telegram.
+const REPEATS=[['','בלי חזרה'],['daily','כל יום'],['workdays','ימי חול (א׳–ה׳)'],['weekly','כל שבוע'],['monthly','כל חודש'],['yearly','כל שנה']];
+function remNewPop(anchor){
+  openPop(anchor,p=>{
+    p.append(el('h3',{textContent:'תזכורת חדשה'}));
+    const tx=el('input',{id:'n-text',type:'text',placeholder:'מה להזכיר?',enterKeyHint:'next'});
+    const nx=new Date(Date.now()+36e5);nx.setMinutes(0);
+    const dt=el('input',{id:'n-date',type:'date',value:isoDay(nx)}),tm=el('input',{id:'n-time',type:'time',value:pad(nx.getHours())+':00',step:300});
+    const rp=el('select',{id:'n-rep'});REPEATS.forEach(([v,n])=>rp.append(el('option',{value:v,textContent:n})));
+    const q=el('div',{className:'quick'});
+    [['היום',()=>{dt.value=dayISO(0)}],['מחר',()=>{dt.value=dayISO(1)}],['עוד שבוע',()=>{dt.value=dayISO(7)}]].forEach(([n,f])=>q.append(btn(n,n,f)));
+    p.append(el('label',{},['מה',tx]),el('label',{},['יום',dt]),q,el('label',{},['שעה',tm]),el('label',{},['חזרה',rp]));
+    const save=()=>{const t=tx.value.trim();
+      if(!t){toast('מה להזכיר?');tx.focus();return}
+      if(!rp.value&&new Date(dt.value+'T'+tm.value)<new Date()){toast('הזמן הזה כבר עבר');return}
+      ok.disabled=true;ok.textContent='שומר…';
+      google.script.run.withSuccessHandler(r=>{
+        if(r&&r.ok){closePop();toast('✓ נקבעה תזכורת: '+r.ok);setTimeout(()=>load(true),300)}
+        else{ok.disabled=false;ok.textContent='שמור';toast((r&&r.q)||'לא נשמר',6000)}})
+        .withFailureHandler(err=>{ok.disabled=false;ok.textContent='שמור';toast('לא הצלחתי לשמור: '+(err&&err.message||err),6000)})
+        .boardOp({t:'rem.add',text:t,date:dt.value,time:tm.value,repeat:rp.value},KEY)};
+    tx.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save()}});
+    const ok=btn('שמור','שמור',save,'primary');p.append(el('div',{className:'btns'},[ok]));
+    setTimeout(()=>tx.focus(),0)})}
+document.getElementById('remAdd').addEventListener('click',e=>remNewPop(e.currentTarget));
 {const cs=CALSHEET;
   cs.append(noteMenu(cs,CAL,()=>V.calNote||'',c=>{V.calNote=c;saveView();renderCal()},null));
   cs.addEventListener('dragover',e=>{if(drag&&drag.note&&drag.note!==CAL){e.preventDefault();cs.classList.add('drop')}});

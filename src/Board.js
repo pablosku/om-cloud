@@ -158,23 +158,24 @@ function boardDo_(op) {
     }
     case 'list.del': if (op.id === boardShopList_()) return 'kept'; return rowSet_('board_lists', BL_H, op.id, { deleted: now });
     case 'view.set': P.setProperty('BOARD_VIEW', JSON.stringify(op.view || {})); return;
-    case 'rem.add': return boardRemAdd_(String(op.text || '').slice(0, 500));
+    case 'rem.add': return boardRemAdd_(op);
     case 'rem.done': case 'rem.undo': case 'rem.cancel': case 'rem.move': case 'rem.tolist': return boardRem_(op);
   }
   throw new Error('unknown op ' + op.t);
 }
 
-// "+ תזכורת חדשה" on the board: the same words as to OM ("מחר ב-9 להתקשר לרופא"). OM also confirms it in Telegram (with בטל).
-function boardRemAdd_(text) {
-  const at = new Date(), p = text.trim() && parse(text, at, '');
-  if (!p) return { q: text.trim() ? 'Gemini עמוס כרגע. נסה שוב בעוד רגע.' : '' };
-  fixParse_(text, at, p);
-  if (p.intent !== 'reminder' || !p.when || !p.text) return { q: p.question || 'על מה ומתי להזכיר? למשל: מחר ב-9 להתקשר לרופא' };
-  const st = Utilities.parseDate(p.when, userTz(), 'yyyy-MM-dd HH:mm');
-  if (isNaN(st.getTime())) return { q: 'לא הבנתי את הזמן. תנסח שוב?' };
-  if (!REP[p.repeat] && st.getTime() < Date.now() - 60000) return { q: 'הזמן הזה כבר עבר. תנסח שוב?' };
-  create(p);
-  return { ok: p.text, when: p.when };
+// "+ תזכורת חדשה" on the board (Pablo 28.11): a small form, text + day + time + repeat; no Gemini needed.
+// create() makes the calendar event and OM confirms it in Telegram (with בטל), as for a reminder sent to the bot.
+function boardRemAdd_(op) {
+  const text = String(op.text || '').trim().slice(0, 300), date = String(op.date || ''), time = String(op.time || '');
+  const repeat = REP[op.repeat] ? op.repeat : null;
+  if (!text) return { q: 'מה להזכיר?' };
+  if (!/^\d{4}-\d\d-\d\d$/.test(date) || !/^\d\d:\d\d$/.test(time)) return { q: 'חסר יום או שעה' };
+  const st = Utilities.parseDate(date + ' ' + time, userTz(), 'yyyy-MM-dd HH:mm');
+  if (isNaN(st.getTime())) return { q: 'היום או השעה לא תקינים' };
+  if (!repeat && st.getTime() < Date.now() - 60000) return { q: 'הזמן הזה כבר עבר' };
+  create({ intent: 'reminder', text, when: date + ' ' + time, repeat, every: 1 });
+  return { ok: text };
 }
 
 function boardRem_(op) {
