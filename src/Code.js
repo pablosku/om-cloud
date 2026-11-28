@@ -322,9 +322,9 @@ function command(text) {
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
 const VERSION = '32';
 const RELEASE_NOTES = '🆕 גרסה 32 עלתה. פתק ההשראה:\n\n' +
-  '1. במסך מלא: בלי כותרת, בלי נקודות ההתקדמות ובלי המקור. נשארים רק הפסוק, השיחה ותיבת הכתיבה.\n' +
-  '2. במצב פתק: הפתק לא גדל יותר מגובה המסך. השיחה נגללת בתוך הפתק ונפתחת על ההודעה האחרונה.\n' +
-  '3. תיבת כתיבה ריקה תופסת שורה אחת גם במצב פתק.';
+  '1. יש רק שני מצבים: שורה ממוזערת עם הפסוק, ומסך מלא. מצב הפתק הוסר. נגיעה בשורה פותחת מסך מלא, ו־− ממזער.\n' +
+  '2. במסך מלא: בלי כותרת, בלי נקודות ההתקדמות ובלי המקור. נשארים הפסוק, השיחה ותיבת הכתיבה.\n' +
+  '3. גודל הטקסט (⋯) עבר לראש המסך המלא, ו"ימים קודמים" נמצא בסוף השיחה.';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },
