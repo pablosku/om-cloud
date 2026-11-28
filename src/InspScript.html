@@ -4,39 +4,46 @@
 (()=>{
 const IC='pablo-insp-v1', DRAFT='pablo-insp-draft';
 const MIC='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+const SVG=d=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const I_FULL=SVG('<path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/>'), I_BACK=SVG('<path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7"/>'), I_MIN=SVG('<path d="M5 12h14"/>'), I_PLUS=SVG('<path d="M12 5v14M5 12h14"/>');
+const I_UP='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 const RATE=[['a','מדויק ומעמיק'],['b','טוב, אפשר להעמיק יותר'],['c','פחות רלוונטי עבורי']];
 const CH=[[1,'פרק 1 · פילוסופיה'],[2,'פרק 2 · פרקטיקה'],[3,'פרק 3 · חדשות טובות']];
 const STAGE=['פרק 1: איך אתה מבין','דיון','איפה זה פוגש אותך','פרקים 2–3'];
 const ls=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}};
 const today=()=>isoDay(new Date());
-let D=null, past=[], state='load', busy=false, failed=false, full=false, open={}, rec=null;
+let D=null, past=[], tried=null, mlist=[], state='load', busy=false, failed=false, full=false, open={}, rec=null;
 try{const c=JSON.parse(ls(IC));if(c&&c.day&&c.day.date===today()){D=c.day;past=c.past||[];state='ok'}}catch(e){}
 
 const sec=document.getElementById('insp');
-const fv=el('div',{className:'fv'}), fvT=el('p'), plus=btn('+','פתח את ההשראה',()=>setFold(false),'hb');fv.append(fvT,plus);
+const fv=el('div',{className:'fv'}), fvT=el('p'), plus=btn('','פתח את ההשראה',()=>setFold(false),'hb');plus.innerHTML=I_PLUS;fv.append(fvT,plus);
 const ttl=el('span',{className:'ttl'}), steps=el('span',{className:'steps'});
-const fullB=btn('⤢','מסך מלא',()=>setFull(!full),'hb'), minB=btn('−','קפל את ההשראה',()=>setFold(true),'hb');
+const fullB=btn('','מסך מלא',()=>setFull(!full),'hb'), minB=btn('','קפל את ההשראה',()=>setFold(true),'hb');fullB.innerHTML=I_FULL;minB.innerHTML=I_MIN;
 const ih=el('div',{className:'ih'},[ttl,steps,fullB,minB]);
 const body=el('div',{className:'body'});
 const ta=el('textarea',{rows:1,placeholder:'התשובה שלך…'});ta.setAttribute('aria-label','התשובה שלך');ta.value=ls(DRAFT)||'';
-const up=btn('↑','שלח',()=>sendIt(),'up'), mic=btn('','הכתבה',()=>dictate(),'mic');mic.innerHTML=MIC;
+const up=btn('','שלח',()=>sendIt(),'up'), mic=btn('','הכתבה',()=>dictate(),'mic');mic.innerHTML=MIC;up.innerHTML=I_UP;
 const box=el('div',{className:'box2'},[ta,el('div',{className:'bar'},[up,mic])]);
-const archB=btn('ימים קודמים ▾','ימים קודמים',()=>{open.arch=!open.arch;renderPast()}), modelT=el('span');
-const arch=el('div',{className:'arch'},[archB,modelT]), pastEl=el('div',{className:'past'});pastEl.hidden=true;
+const modelL=el('div',{className:'mline'}); // which model answered, small, under the box (Pablo 28.11)
+const archB=btn('ימים קודמים ▾','ימים קודמים',()=>{open.arch=!open.arch;renderPast()});
+const arch=el('div',{className:'arch'},[archB]), pastEl=el('div',{className:'past'});pastEl.hidden=true;
 const dots=btn('⋯','גודל הטקסט',()=>openPop(dots,sizePop),'dots');
-sec.append(fv,ih,body,box,arch,pastEl,dots);
+sec.append(fv,ih,body,box,modelL,arch,pastEl,dots);
 
 /* ---------- size (per device, in BOARD_VIEW) ---------- */
 const sizeKey=()=>'insp_'+DEV, size=()=>V[sizeKey()]||1;
 function sizePop(p){p.classList.add('nm');const t=el('span',{textContent:Math.round(size()*100)+'%'});
   const set=d=>{V[sizeKey()]=Math.max(.8,Math.min(1.8,Math.round((size()+d)*10)/10));saveView();applySize();t.textContent=Math.round(size()*100)+'%'};
-  p.append(el('div',{className:'isz'},[btn('א−','הקטן את הטקסט',()=>set(-.1)),t,btn('א+','הגדל את הטקסט',()=>set(.1))]))}
+  p.append(el('div',{className:'isz'},[btn('א−','הקטן את הטקסט',()=>set(-.1)),t,btn('א+','הגדל את הטקסט',()=>set(.1))]));
+  // which model answered, and why stronger ones did not (busy / no free access)
+  const why=c=>c===429?'עמוס או בלי מכסה':c==='skip'?'דולג (נכשל קודם)':c===403||c===404||c===400?'אין גישה':c===200?'ענה':String(c);
+  if(tried&&tried.list&&tried.list.length)p.append(el('div',{className:'mtried'},tried.list.map(x=>el('span',{textContent:x.m.replace(/^gemini-/,'')+': '+why(x.c),title:x.r||''}))))}
 function applySize(){sec.style.setProperty('--is',size());grow()}
 
 /* ---------- fold / full screen ---------- */
 function setFold(f){V.fold=Object.assign({},V.fold);if(f)V.fold.insp=1;else delete V.fold.insp;if(f&&full)setFull(false);saveView();inspRender()}
 function setFull(f){full=f;sec.classList.toggle('full',f);document.body.classList.toggle('insp-full',f);
-  fullB.textContent=f?'⤡':'⤢';fullB.title=f?'חזרה לפתק':'מסך מלא';fullB.setAttribute('aria-label',fullB.title);
+  fullB.innerHTML=f?I_BACK:I_FULL;fullB.title=f?'חזרה לפתק':'מסך מלא';fullB.setAttribute('aria-label',fullB.title);
   grow();if(f)setTimeout(()=>{body.scrollTop=body.scrollHeight},0);else sec.scrollIntoView({block:'start'})}
 
 /* ---------- text: escape, then **bold**, ### heading, - list, paragraphs ---------- */
@@ -76,8 +83,8 @@ function inspRender(){
   body.innerHTML='';
   if(!D){body.append(el('p',{className:'story',textContent:state==='err'?'Gemini עמוס כרגע. אנסה שוב בעוד כמה דקות.':'מכין את ההשראה של היום…'}))}
   else{
-    if(D.src)body.append(el('span',{className:'src',textContent:D.src}));
-    body.append(el('p',{className:'verse',textContent:D.verse}));
+    const vh=el('div',{className:'vhead'});if(D.src)vh.append(el('span',{className:'src',textContent:D.src}));
+    vh.append(el('p',{className:'verse',textContent:D.verse}));body.append(vh); // pinned at the top in full screen
     if(D.story)body.append(el('p',{className:'story',textContent:D.story}));
     if(D.question)body.append(el('p',{className:'ask',textContent:D.question}));
     const chat=el('div',{className:'chat'});
@@ -86,7 +93,8 @@ function inspRender(){
     else if(failed){const f=el('div',{className:'b om fail',textContent:'לא הגיעה תשובה.'});f.append(btn('נסה שוב','נסה שוב',()=>sendIt(true)));chat.append(f)}
     body.append(chat)}
   box.hidden=!D;up.disabled=busy;
-  modelT.textContent=D&&D.model?'· '+D.model.replace(/^gemini-/,'Gemini '):'';
+  const lastM=D&&([...D.chat].reverse().find(m=>m.m)||{}).m||D&&D.model||'';
+  modelL.textContent=lastM?'ענה: '+lastM.replace(/^models\//,''):'';modelL.hidden=!D||!lastM;
   arch.hidden=!past.length;renderPast();applySize()}
 function renderPast(){
   pastEl.hidden=!open.arch;archB.textContent='ימים קודמים '+(open.arch?'▴':'▾');if(!open.arch)return;
@@ -106,7 +114,7 @@ const cacheIt=()=>ls(IC,JSON.stringify({day:D,past}));
 /* ---------- server ---------- */
 function inspLoad(){
   google.script.run.withSuccessHandler(r=>{
-    if(!r)return;past=r.past||past;
+    if(!r)return;past=r.past||past;if(r.tried)tried=r.tried;if(r.models)mlist=r.models;
     if(r.wait){state='load';setTimeout(inspLoad,15000)}
     else if(r.day){if(!busy){D=r.day;state='ok'}}
     else if(!D){state='err';setTimeout(inspLoad,5*60000)}
@@ -118,7 +126,7 @@ function sendIt(retry){
   if(!retry){D.chat.push({r:'me',t});ta.value='';ls(DRAFT,'');grow()}
   busy=true;failed=false;inspRender();scrollEnd();
   google.script.run.withSuccessHandler(r=>{busy=false;
-    if(r&&r.day)D=r.day;failed=!r||!!r.err;cacheIt();inspRender();scrollEnd()})
+    if(r&&r.day)D=r.day;if(r&&r.tried)tried=r.tried;failed=!r||!!r.err;cacheIt();inspRender();scrollEnd()})
   .withFailureHandler(()=>{busy=false;failed=true;inspRender()}).inspSend(retry?'':t,KEY)}
 function scrollEnd(){const last=body.querySelector('.chat>:last-child');if(!last)return;
   if(full)body.scrollTop=body.scrollHeight;else last.scrollIntoView({block:'nearest',behavior:'smooth'})}
@@ -126,16 +134,26 @@ function scrollEnd(){const last=body.querySelector('.chat>:last-child');if(!last
 /* ---------- typing and dictation ---------- */
 ta.addEventListener('input',()=>{grow();ls(DRAFT,ta.value)});
 ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();sendIt()}});
+// Dictation (fix 28.11): inside Google's page frame the browser may refuse the microphone without any error,
+// so the button stayed on and recorded nothing. Now: a second tap always stops; if no sound starts within
+// 4 seconds it stops by itself, says so, and later taps go straight to the keyboard (its own mic works).
+const MICBAD='pablo-insp-micbad';let micBad=!!ls(MICBAD); // remembered here too: storage can be off
+function micOff(){if(rec){const r=rec;rec=null;try{r.abort()}catch(e){}}clearTimeout(dictate.t);mic.classList.remove('on')}
+function useKeyboard(msg){toast(msg||'אפשר להכתיב עם המיקרופון של המקלדת',6000);ta.focus()}
 function dictate(){
+  if(rec||mic.classList.contains('on')){micOff();return}
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(rec){rec.stop();return}
-  if(!SR){toast('אפשר להכתיב עם המיקרופון של המקלדת');ta.focus();return}
-  const base=ta.value.replace(/\s*$/,''),sep=base?' ':'';
-  rec=new SR();rec.lang='he-IL';rec.continuous=true;rec.interimResults=true;
-  rec.onresult=e=>{let s='';for(let k=0;k<e.results.length;k++)s+=e.results[k][0].transcript;ta.value=base+sep+s.trim();grow();ls(DRAFT,ta.value)};
-  rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){toast('המיקרופון חסום בדף הזה. אפשר להכתיב עם המיקרופון של המקלדת',6000);ta.focus()}};
-  rec.onend=()=>{rec=null;mic.classList.remove('on')};
-  try{rec.start();mic.classList.add('on')}catch(e){rec=null;toast('ההכתבה לא נפתחה. אפשר להכתיב עם המיקרופון של המקלדת')}}
+  if(!SR||micBad){useKeyboard();return}
+  const base=ta.value.replace(/\s*$/,''),sep=base?' ':'';let heard=false;
+  const r=new SR();rec=r;r.lang='he-IL';r.continuous=true;r.interimResults=true;
+  r.onaudiostart=()=>{heard=true};
+  r.onresult=e=>{heard=true;let s='';for(let k=0;k<e.results.length;k++)s+=e.results[k][0].transcript;ta.value=base+sep+s.trim();grow();ls(DRAFT,ta.value)};
+  r.onerror=e=>{if(rec!==r)return;micOff();
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){micBad=true;ls(MICBAD,'1');useKeyboard('המיקרופון חסום בתוך הדף של Google. אפשר להכתיב עם המיקרופון של המקלדת')}
+    else if(e.error!=='aborted'&&e.error!=='no-speech')toast('ההכתבה נעצרה ('+e.error+')')};
+  r.onend=()=>{if(rec===r)micOff()};
+  try{r.start();mic.classList.add('on')}catch(e){micOff();useKeyboard();return}
+  dictate.t=setTimeout(()=>{if(rec===r&&!heard){micOff();micBad=true;ls(MICBAD,'1');useKeyboard('המיקרופון לא נפתח בתוך הדף של Google. אפשר להכתיב עם המיקרופון של המקלדת')}},4000)}
 
 window.inspActive=()=>state!=='off';window.inspRender=inspRender;
 inspRender();inspLoad();
