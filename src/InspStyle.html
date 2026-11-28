@@ -59,7 +59,12 @@
 .insp.full{position:fixed;inset:0;z-index:30;border-radius:0;border:0;padding:max(12px,env(safe-area-inset-top,0px)) 16px max(10px,env(safe-area-inset-bottom,0px));gap:8px}
 .insp.full .body{flex:1;overflow:auto;font-size:calc(1.08rem * var(--is));padding-bottom:6px}
 .insp.full .box2 textarea{font-size:calc(1.08rem * var(--is));max-height:40vh;overflow:auto}
-.insp.full .vhead{position:sticky;top:0;z-index:1;background:var(--note,var(--note-def,var(--note-auto)));padding-bottom:8px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.insp.full .vhead{position:sticky;top:0;z-index:1;background:var(--note,var(--note-def,var(--note-auto)));padding-bottom:6px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+/* full screen (Pablo 28.11): a small verse at the top, at most 3 lines, so the conversation gets the screen */
+.insp.full .vhead .verse{font-size:.92em;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+/* an empty answer box is one line: text and buttons side by side */
+.insp.full .box2.empty{flex-direction:row;align-items:center;padding:6px 8px 6px 12px}
+.insp.full .box2.empty textarea{min-height:0}
 .insp.full .arch,.insp.full .dots,.insp.full .past{display:none}
 body.insp-full{overflow:hidden}
 .pop .isz{display:flex;align-items:center;gap:8px;white-space:nowrap}

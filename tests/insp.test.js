@@ -23,7 +23,8 @@ const mock = (() => {
     inspGet() { calls.push(['get']); setTimeout(() => ok({ day: JSON.parse(JSON.stringify(day)), past: [{ date: '2026-11-27', src: 'גיטה 2:47', verse: 'עשה בלי להיאחז בפרי.' }] }), 10); },
     inspSend(t) { calls.push(['send', t]); if (t) day.chat.push({ r: 'me', t }); const a = replies.shift();
       day.chat.push(Object.assign({ r: 'om', t: a.t, m: 'gemini-2.5-pro' }, a.src ? { src: a.src } : {}, a.stage === 4 ? { fb: true } : {})); day.stage = a.stage;
-      setTimeout(() => ok({ day: JSON.parse(JSON.stringify(day)) }), 30); },
+      setTimeout(() => ok({ day: JSON.parse(JSON.stringify(day)) }), window.__slow ? 3600 : 30); },
+    inspStatus() { setTimeout(() => ok({ m: 'gemini-3.6-flash', i: 2, prev: { m: 'gemini-3.8-flash', c: 503 }, at: Date.now() }), 10); },
     inspRate(ch, v) { calls.push(['rate', ch, v]); },
     inspDay(dt) { setTimeout(() => ok({ date: dt, src: 'גיטה 2:47', story: 'סיפור', chat: [{ r: 'me', t: 'תשובה ישנה' }], ratings: {} }), 10); } }; return o; }
   // a speech recognizer that starts but never hears anything (what happens inside Google's page frame)
@@ -50,7 +51,10 @@ const mock = (() => {
   assert(await p.$$eval('#insp .steps i.on', x => x.length) === 2, 'stage dots follow the stage');
   assert(await p.textContent('#insp .mline') === 'ענה: gemini-2.5-pro' && await p.isVisible('#insp .mline'), 'the model that answered shows under the box');
   if (shot) await p.screenshot({ path: shot + '/insp-board.png' });
-  await p.fill('#insp textarea', 'כן, נמשיך'); await p.click('#insp .bar .up'); await p.waitForTimeout(100);
+  await p.evaluate(() => { window.__slow = true; });
+  await p.fill('#insp textarea', 'כן, נמשיך'); await p.click('#insp .bar .up'); await p.waitForTimeout(3300);
+  assert((await p.textContent('#insp .b.wait')) === 'Google עמוסה (3.8-flash), מנסה 3.6-flash…', 'while waiting: says Google is busy and which model is trying');
+  await p.waitForTimeout(500); await p.evaluate(() => { window.__slow = false; });
   assert(await p.$$eval('#insp .rate button', x => x.length) === 9, 'chapters 2-3: 3 rating buttons per chapter');
   assert(await p.$eval('#insp .srcs a', a => a.href) === 'https://www.nih.gov/x', 'links come from the search sources');
   await p.click('#insp .rate button[aria-label="פרק 2 · פרקטיקה: מדויק ומעמיק"]');
@@ -65,6 +69,7 @@ const mock = (() => {
   await p.$eval('#insp .body', b => { b.scrollTop = b.scrollHeight; });
   const vt = await p.$eval('#insp .vhead', v => v.getBoundingClientRect().top), bt = await p.$eval('#insp .body', b => b.getBoundingClientRect().top);
   assert(Math.abs(vt - bt) < 2, 'full screen: the verse stays pinned at the top while the text scrolls');
+  assert(await p.$eval('#insp .box2', b => b.getBoundingClientRect().height) < 64, 'full screen: an empty answer box is one line');
   if (shot) await p.screenshot({ path: shot + '/insp-full.png' });
   await p.click('#insp .ih button[aria-label="קפל את ההשראה"]');
   assert(await p.$eval('#insp', s => s.classList.contains('folded') && !s.classList.contains('full')), '− in full screen folds and leaves full screen');

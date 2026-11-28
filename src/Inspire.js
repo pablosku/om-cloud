@@ -86,6 +86,12 @@ function inspSend(text, k) {
   return { day: d, tried: inspTried_() };
 }
 
+// while the page waits for an answer it asks every few seconds what is happening (Pablo 28.11: "write something")
+function inspStatus(k) {
+  boardGuard_(k);
+  try { return JSON.parse(CacheService.getScriptCache().get('insp_status') || 'null'); } catch (e) { return null; }
+}
+
 function inspRate(ch, v, k) {
   boardGuard_(k);
   const f = inspRow_(inspToday_());
@@ -143,7 +149,8 @@ function inspCall_(sys, contents, opt) {
   if (opt.json) body.generationConfig.responseMimeType = 'application/json';
   if (opt.search) body.tools = [{ google_search: {} }];
   const tried = []; // what happened to each model, shown in the note's ⋯ menu (fix 28.11: Pablo asked why Flash answered)
-  const done = (res) => { P.setProperty('INSP_TRIED', JSON.stringify({ at: Date.now(), list: tried.slice(0, 8) })); log('insp model choice', tried.map(x => x.m + ': ' + x.c + (x.r ? ' (' + x.r + ')' : '')).join(' | ')); return res; }; // logged every call (Pablo 28.11)
+  const status = (m, i) => c.put('insp_status', JSON.stringify({ m, i, prev: tried.length ? tried[tried.length - 1] : null, at: t0 }), 600);
+  const done = (res) => { c.remove('insp_status'); P.setProperty('INSP_TRIED', JSON.stringify({ at: Date.now(), list: tried.slice(0, 8) })); log('insp model choice', tried.map(x => x.m + ': ' + x.c + (x.r ? ' (' + x.r + ')' : '')).join(' | ')); return res; }; // logged every call (Pablo 28.11)
   // speed (Pablo 28.11 "it thinks a long time"): the model that answered last goes first for 6 hours,
   // so a conversation does not wait for the stronger ones to fail again on every message
   const good = c.get('insp_good_' + tag), order = inspModels_();
@@ -152,6 +159,7 @@ function inspCall_(sys, contents, opt) {
     if (Date.now() - t0 > INSP_MAX_MS) break;
     if (c.get('insp_bad_' + tag + model)) { tried.push({ m: model, c: 'skip' }); continue; }
     let r;
+    status(model, tried.length);
     try {
       r = UrlFetchApp.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         { method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': prop('GEMINI_KEY') }, payload: JSON.stringify(body), muteHttpExceptions: true });
