@@ -5,6 +5,7 @@ Live web-app deployment: `AKfycbwtF-…BQwCyDVpIQ` (same URL every time, the Wor
 
 | OM version | Date | Apps Script version | Commit | Changes |
 |---|---|---|---|---|
+| v29 | 28.11.2026 | @31 | 9ef1059 | morning inspiration: daily Gemini mentor chat on the board (Inspire.js, InspStyle/InspScript.html, sheet insp_days) (#27) |
 | v28 | 28.11.2026 | @30 | a9ff093 | dividers in every note, item menu (↑↓ ✎ move), row colours, reminder lines, new reminder form, fold buttons, family ↑↓; code split (Shop.js, BoardStyle/BoardScript.html) + tests (#25) |
 | v27 | 27.11.2026 | @29 | 2b0a5a8 | shopping: no duplicates, ↑↓ between dividers, dividers don't collapse; family page served from GAS (FamilyPage.html) (#23) |
 | v26 | 27.11.2026 | @28 | 0cb0a2d | shopping list in board ('לקנות' note, store dividers), /family page via Worker, movable reminders note, one ⋯ menu (#21) |
@@ -36,3 +37,4 @@ v25: DEPLOYED 27.11.2026 ~17:00 Israel (Apps Script @27), bot + board deployment
 v26: DEPLOYED 27.11.2026 ~20:05 Israel (Apps Script @28), bot + board both @28, main @0cb0a2d, 11 hashes matched, plain push. Worker worker/worker_relay.js (adds /shop) pasted by Pablo in Cloudflare separately. Backup v25: C:\Users\ASUS\om-cloud-backup-v25. Rollback: -V 27.
 v27: DEPLOYED 27.11.2026 ~20:30 Israel (Apps Script @29), bot + board both @29, main @2b0a5a8, 12 hashes matched (new FamilyPage.html), plain push. Pablo pastes worker_relay.js after deploy. Backup v26: C:\Users\ASUS\om-cloud-backup-v26. Rollback: -V 28 (Worker then also needs the v26 version).
 v28: DEPLOYED 28.11.2026 ~06:00 Israel (Apps Script @30), bot + board both @30, main @a9ff093, 15 src hashes matched (tests/ not pushed), plain push of 16 files. Approved by Pablo in the board thread ("תכניס לגרסה ושדר"). Backup v27: C:\Users\ASUS\om-cloud-backup-v27. Rollback: -V 29.
+v29: DEPLOYED 28.11.2026 ~06:52 Israel (Apps Script @31), bot + board both @31, main @9ef1059, 18 src hashes matched (tests/ not pushed), plain push of 19 files. Approved by Pablo on the card in thread "Add morning inspiration to dashboard". Backup v28: C:\Users\ASUS\om-cloud-backup-v28. Rollback: -V 30.
