@@ -1,5 +1,6 @@
 // ===== Board: Pablo's one-page TODO board (web page served by doGet, data in the "secretary db" sheet) =====
-// Page: BoardPage.html (google.script.run -> boardGet / boardOp). Opened from a separate web-app deployment
+// Page: BoardPage.html (markup) + BoardStyle.html (look) + BoardScript.html (logic), google.script.run -> boardGet / boardOp.
+// Shopping ("לקנות", family page, OM voice): Shop.js. Opened from a separate web-app deployment
 // with access "Only myself"; every call also checks that the viewer is the script owner (boardOwner_).
 // Sheet tabs: board_lists, board_items, inspiration. Deletes are soft (deleted = time) and purged after 30 days.
 // Reminders: read from the Reminders calendar (next 7 days); done / undo / cancel / move / to-list act on it
@@ -8,7 +9,8 @@
 
 const BL_H = ['id', 'name', 'order', 'note', 'kind', 'deleted'];
 const BI_H = ['id', 'list', 'text', 'done', 'star', 'color', 'last_color', 'wait_note', 'wait_since', 'created', 'updated', 'deleted', 'kind', 'sec', 'pos'];
-// kind: '' = task, 'sep' = a divider line (text = its label; pos = its place among the lines, set by ↑ ↓). sec: the divider an item sits under ('' = top of the note).
+// kind: '' = task, 'sep' = a divider line (text = its label). pos = the row's place in its note (items and lines together, set by ↑ ↓).
+// sec: the line an item sat under before 28.11 (read once by boardNorm_, not written any more).
 // Shopping (27.11, replaces Google Keep): the note of kind 'shop' ("לקנות") is the family list. Its name is fixed and it
 // cannot be deleted. The family sees only it, on a page the Cloudflare Worker serves (shopApi_ below, key FAMILY_KEY).
 const BQ_H = ['sentence', 'commentary', 'source'];
@@ -35,6 +37,8 @@ function boardOwner_(k) {
 function boardGuard_(k) { if (!boardOwner_(k)) throw new Error('not allowed'); }
 
 // doGet (Print.js) calls this when the request has no URL secret.
+// the page is split in three files (markup, look, logic); BoardPage.html pulls the other two in with include_
+function include_(name) { return HtmlService.createHtmlOutputFromFile(name).getContent(); }
 function boardPage_(q) {
   const k = (q && q.k) || '';
   if (!boardOwner_(k)) return HtmlService.createHtmlOutput('<p dir="rtl" style="font-family:sans-serif">אין גישה. שלח /board לבוט OM כדי לקבל את הקישור.</p>');
@@ -59,13 +63,14 @@ function boardGet(k) {
   const lists = lrows.filter(r => !r[BL.deleted]).sort((a, b) => a[BL.order] - b[BL.order])
     .map(r => ({ id: String(r[BL.id]), name: String(r[BL.name]), note: String(r[BL.note] || ''), kind: String(r[BL.kind] || 'list'), items: [] }));
   const byId = {}; lists.forEach(l => byId[l.id] = l);
-  it.getDataRange().getValues().slice(1).forEach(r => {
+  const v = it.getDataRange().getValues(); boardNorm_(it, v);
+  v.slice(1).forEach(r => {
     if (!r[BI.id] || r[BI.deleted] || !byId[r[BI.list]]) return;
     byId[r[BI.list]].items.push({
       id: String(r[BI.id]), t: String(r[BI.text]), done: r[BI.done] === true, star: r[BI.star] === true,
       c: String(r[BI.color] || ''), lastC: String(r[BI.last_color] || ''),
       wait: r[BI.wait_since] ? { note: String(r[BI.wait_note] || ''), since: dstr_(r[BI.wait_since]) } : null,
-      k: String(r[BI.kind] || ''), sec: String(r[BI.sec] || ''), pos: Number(r[BI.pos] || 0)
+      k: String(r[BI.kind] || ''), pos: Number(r[BI.pos] || 0)
     });
   });
   return { lists, cal: boardCal_(), quote: boardQuote_(), view: JSON.parse(prop('BOARD_VIEW') || '{}'), today: dstr_(new Date()) };
@@ -102,8 +107,8 @@ function boardOp(op, k) {
 function boardDo_(op) {
   const now = new Date();
   switch (op.t) {
-    case 'item.add': {
-      boardItemsTab_().appendRow([op.id, op.list, String(op.text).slice(0, 500), false, false, '', '', '', '', now, now, '', op.k === 'sep' ? 'sep' : '', op.sec || '', op.k === 'sep' ? 1e6 : '']); // a new line goes last
+    case 'item.add': { // pos = its place in the note (the page sends it); none = end of the top part
+      boardItemsTab_().appendRow([op.id, op.list, String(op.text).slice(0, 500), false, false, '', '', '', '', now, now, '', op.k === 'sep' ? 'sep' : '', '', Number(op.pos) || '']);
       return;
     }
     case 'item.set': { // fields: text, done, star, c, lastC, wait (null | {note, since}), list
@@ -114,23 +119,19 @@ function boardDo_(op) {
       if ('c' in f) set.color = f.c || '';
       if ('lastC' in f) set.last_color = f.lastC || '';
       if ('list' in f) set.list = f.list;
-      if ('sec' in f) set.sec = f.sec || '';
+      if ('pos' in f) set.pos = Number(f.pos) || '';
       if ('wait' in f) { set.wait_note = f.wait ? f.wait.note || '' : ''; set.wait_since = f.wait ? f.wait.since : ''; }
       set.updated = now;
       return rowSet_('board_items', BI_H, op.id, set);
     }
     case 'item.del': return rowSet_('board_items', BI_H, op.id, { deleted: now });
-    case 'sep.order': { // the lines of one note, top to bottom
+    case 'list.reorder': case 'sep.order': { // rows of one note (items and lines), top to bottom
       const t = boardItemsTab_(), v = t.getDataRange().getValues(), pos = {};
       (op.ids || []).forEach((id, k) => { pos[id] = k + 1; });
       v.forEach((r, i) => { if (i && pos[r[BI.id]]) t.getRange(i + 1, BI.pos + 1).setValue(pos[r[BI.id]]); });
       return;
     }
-    case 'sep.del': { // remove a divider: its items move up to the top of the note (not deleted)
-      const t = boardItemsTab_(), v = t.getDataRange().getValues();
-      v.forEach((r, i) => { if (i && String(r[BI.sec]) === String(op.id)) t.getRange(i + 1, BI.sec + 1).setValue(''); });
-      return rowSet_('board_items', BI_H, op.id, { deleted: now });
-    }
+    case 'sep.del': return rowSet_('board_items', BI_H, op.id, { deleted: now }); // only the line goes; the items stay where they are
     case 'list.clear': { // delete the done items of one list
       const t = tab_('board_items', BI_H), v = t.getDataRange().getValues();
       v.forEach((r, i) => { if (i && r[BI.list] === op.id && r[BI.done] === true && !r[BI.deleted]) t.getRange(i + 1, BI.deleted + 1).setValue(now); });
@@ -157,9 +158,23 @@ function boardDo_(op) {
     }
     case 'list.del': if (op.id === boardShopList_()) return 'kept'; return rowSet_('board_lists', BL_H, op.id, { deleted: now });
     case 'view.set': P.setProperty('BOARD_VIEW', JSON.stringify(op.view || {})); return;
+    case 'rem.add': return boardRemAdd_(String(op.text || '').slice(0, 500));
     case 'rem.done': case 'rem.undo': case 'rem.cancel': case 'rem.move': case 'rem.tolist': return boardRem_(op);
   }
   throw new Error('unknown op ' + op.t);
+}
+
+// "+ תזכורת חדשה" on the board: the same words as to OM ("מחר ב-9 להתקשר לרופא"). OM also confirms it in Telegram (with בטל).
+function boardRemAdd_(text) {
+  const at = new Date(), p = text.trim() && parse(text, at, '');
+  if (!p) return { q: text.trim() ? 'Gemini עמוס כרגע. נסה שוב בעוד רגע.' : '' };
+  fixParse_(text, at, p);
+  if (p.intent !== 'reminder' || !p.when || !p.text) return { q: p.question || 'על מה ומתי להזכיר? למשל: מחר ב-9 להתקשר לרופא' };
+  const st = Utilities.parseDate(p.when, userTz(), 'yyyy-MM-dd HH:mm');
+  if (isNaN(st.getTime())) return { q: 'לא הבנתי את הזמן. תנסח שוב?' };
+  if (!REP[p.repeat] && st.getTime() < Date.now() - 60000) return { q: 'הזמן הזה כבר עבר. תנסח שוב?' };
+  create(p);
+  return { ok: p.text, when: p.when };
 }
 
 function boardRem_(op) {
@@ -180,13 +195,38 @@ function boardRem_(op) {
   }
   // done, or moved into a list (decided 27.11: the reminder is marked done, not deleted)
   if (op.t === 'rem.tolist') {
-    tab_('board_items', BI_H).appendRow([op.item, op.list, ev.getTitle().replace(/^✅\s*/, ''), false, false, '', '', '', '', new Date(), new Date(), '']);
+    tab_('board_items', BI_H).appendRow([op.item, op.list, ev.getTitle().replace(/^✅\s*/, ''), false, false, '', '', '', '', new Date(), new Date(), '', '', '', Number(op.pos) || '']);
     ev.setTag('board', String(op.listName || '').slice(0, 80) || '-');
   }
   if (ev.getTag('state') !== 'done') {
     ev.setTag('state', 'done');
     if (!ev.isRecurringEvent()) ev.setTitle('✅ ' + ev.getTitle());
   }
+}
+
+// ---------- order inside a note (28.11): every row (item or line) has pos, the page shows them by pos ----------
+// Rows without pos (data from before 28.11, or added by a reminder): under their old line (sec) at the end of
+// that part, else at the end of the top part. Takes [{id, k, sec, pos, n}], returns them in order.
+function boardSeq_(rows) {
+  const out = rows.filter(x => x.pos > 0).sort((a, b) => (a.pos - b.pos) || (a.n - b.n));
+  rows.filter(x => !(x.pos > 0)).forEach(x => {
+    const s = x.sec ? out.findIndex(y => y.k === 'sep' && y.id === x.sec) : -1;
+    let at;
+    if (s >= 0) { at = s + 1; while (at < out.length && out[at].k !== 'sep') at++; }
+    else { at = out.findIndex(y => y.k === 'sep'); if (at < 0) at = out.length; }
+    out.splice(at, 0, x);
+  });
+  return out;
+}
+// give pos 1..n to every note (or only list `only`) that has a row without one. v = the sheet values (updated in place).
+function boardNorm_(t, v, only) {
+  const by = {};
+  v.forEach((r, i) => { if (!i || !r[BI.id] || r[BI.deleted] || (only && String(r[BI.list]) !== only)) return;
+    (by[r[BI.list]] = by[r[BI.list]] || []).push({ id: String(r[BI.id]), k: String(r[BI.kind] || ''), sec: String(r[BI.sec] || ''), pos: Number(r[BI.pos] || 0), n: i }); });
+  Object.keys(by).forEach(l => {
+    if (by[l].every(x => x.pos > 0)) return;
+    boardSeq_(by[l]).forEach((x, k) => { if (v[x.n][BI.pos] !== k + 1) { v[x.n][BI.pos] = k + 1; t.getRange(x.n + 1, BI.pos + 1).setValue(k + 1); } });
+  });
 }
 
 // ---------- helpers ----------
@@ -210,65 +250,6 @@ function boardShopList_() {
   }
   c.put('shop_list', id, 21600);
   return id;
-}
-
-// ---------- shopping: the family page (via the Worker) and OM voice ----------
-// The open (not done) items of "לקנות", in the order the board shows them: top items, then each divider and its items.
-function shopRead_() {
-  const id = boardShopList_(), v = boardItemsTab_().getDataRange().getValues().slice(1)
-    .filter(r => r[BI.id] && !r[BI.deleted] && String(r[BI.list]) === id);
-  const seps = v.filter(r => r[BI.kind] === 'sep').map((r, k) => ({ id: String(r[BI.id]), t: String(r[BI.text]), p: Number(r[BI.pos] || 0), k }))
-    .sort((a, b) => (a.p - b.p) || (a.k - b.k)).map(x => ({ id: x.id, t: x.t }));
-  const ok = {}; seps.forEach(x => ok[x.id] = 1);
-  const items = v.filter(r => r[BI.kind] !== 'sep').map(r => ({ id: String(r[BI.id]), t: String(r[BI.text]), done: r[BI.done] === true,
-    sec: ok[r[BI.sec]] ? String(r[BI.sec]) : '' }));
-  return { seps, items };
-}
-// add items to "לקנות" (OM voice and the family page). store = a divider label ("טמבור") or ''; a new label makes a divider.
-// Returns {added: [], dup: []}: an item already open on the list is not added twice.
-function shopAdd_(names, store, secId) {
-  const id = boardShopList_(), cur = shopRead_(), now = new Date(), t = boardItemsTab_();
-  const norm = x => String(x).replace(/\s+/g, ' ').trim();
-  let sec = cur.seps.some(x => x.id === secId) ? secId : '';
-  if (!sec && store) {
-    const s = cur.seps.find(x => norm(x.t) === norm(store));
-    if (s) sec = s.id; else { sec = bid_(); t.appendRow([sec, id, norm(store).slice(0, 60), false, false, '', '', '', '', now, now, '', 'sep', '', 1e6]); }
-  }
-  const open = {}; cur.items.forEach(x => { if (!x.done) open[norm(x.t)] = 1; });
-  const res = { added: [], dup: [] };
-  names.map(norm).filter(String).forEach(n => {
-    if (open[n]) { res.dup.push(n); return; }
-    open[n] = 1; res.added.push(n);
-    t.appendRow([bid_(), id, n.slice(0, 200), false, false, '', '', '', '', now, now, '', '', sec]);
-  });
-  return res;
-}
-// doGet ?s=URL_SECRET&action=shop&f=FAMILY_KEY&op=<json> (the Worker calls it). Family ops only: read, add, tick, move under a line, clear.
-function shopApi_(q) {
-  if (!prop('FAMILY_KEY') || q.f !== prop('FAMILY_KEY')) return json_({ error: 'key' });
-  const op = q.op ? JSON.parse(q.op) : { t: 'get' };
-  const lock = LockService.getScriptLock(); lock.waitLock(20000);
-  try {
-    if (op.t === 'add') shopAdd_([String(op.text || '').slice(0, 200)], '', op.sec);
-    if (op.t === 'sec') { const cur = shopRead_(); // move an item under another line ('' = top)
-      if (cur.items.some(x => x.id === op.id) && (!op.sec || cur.seps.some(x => x.id === op.sec))) rowSet_('board_items', BI_H, op.id, { sec: op.sec || '', updated: new Date() }); }
-    if (op.t === 'done' && shopRead_().items.some(x => x.id === op.id)) rowSet_('board_items', BI_H, op.id, { done: !!op.done, updated: new Date() });
-    if (op.t === 'clear') { const t = boardItemsTab_(), v = t.getDataRange().getValues(), id = boardShopList_();
-      v.forEach((r, i) => { if (i && String(r[BI.list]) === id && r[BI.done] === true && !r[BI.deleted]) t.getRange(i + 1, BI.deleted + 1).setValue(new Date()); }); }
-  } finally { lock.releaseLock(); }
-  return json_(shopRead_());
-}
-// doGet ?s=URL_SECRET&action=shoppage&f=FAMILY_KEY: the family page as plain HTML text (the Worker serves it)
-function shopPage_(q) {
-  if (!prop('FAMILY_KEY') || q.f !== prop('FAMILY_KEY')) return out_('no');
-  return ContentService.createTextOutput(HtmlService.createHtmlOutputFromFile('FamilyPage').getContent());
-}
-// the family link: the Worker's address (from the Telegram webhook) + /shop?f=FAMILY_KEY. "/family חדש" makes a new key.
-function familyLink_(fresh) {
-  if (fresh || !prop('FAMILY_KEY')) P.setProperty('FAMILY_KEY', Utilities.getUuid().replace(/-/g, ''));
-  const w = tg('getWebhookInfo', {}), u = w && w.result && w.result.url;
-  if (!u) return null;
-  return u.replace(/^(https:\/\/[^\/]+).*$/, '$1') + '/shop?f=' + prop('FAMILY_KEY');
 }
 
 function rowSet_(name, header, id, set) {

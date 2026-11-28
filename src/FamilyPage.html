@@ -24,7 +24,7 @@ li.it input{appearance:none;-webkit-appearance:none;width:20px;height:20px;borde
 li.it input:checked{border-color:var(--accent)}
 li.it input:checked::after{content:"";width:10px;height:6px;border:2px solid var(--accent);border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
 li.it.done span{text-decoration:line-through;color:var(--done)}
-li.sep{display:flex;align-items:center;gap:6px;margin:12px 0 2px;color:var(--muted);font-size:.85rem}
+li.sep{display:flex;align-items:center;gap:6px;margin:12px 0 2px;color:var(--muted);font-size:.78rem;font-weight:700;letter-spacing:.04em}
 li.sep::after{content:"";flex:1;border-top:1px solid var(--line)}
 form{display:flex;gap:8px;margin-top:10px}
 form input{flex:1;min-width:0;font:inherit;font-size:1.05rem;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);padding:8px 2px}
@@ -41,7 +41,7 @@ li.it span{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 </style></head><body>
 <main class="note"><h1>לקנות</h1><ul id="list"><li class="msg">טוען…</li></ul>
 <form id="f" autocomplete="off"><input id="t" placeholder="+ מה לקנות?" enterkeyhint="done" aria-label="פריט חדש"><button>הוסף</button></form>
-<div class="hint" id="h">אפשר לכתוב "טמבור: ברגים" כדי להוסיף מתחת לחנות. לחיצה על פריט מזיזה אותו ↑ ↓ לחנות אחרת.</div>
+<div class="hint" id="h">אפשר לכתוב "טמבור: ברגים" כדי להוסיף מתחת לחנות. לחיצה על פריט: חצים ↑ ↓ להזיז אותו.</div>
 <div class="bought" id="b" hidden></div><ul id="dl" hidden></ul></main>
 <script>
 const F=new URLSearchParams(location.search).get('f')||'';
@@ -62,43 +62,44 @@ function itemEl(i){
   const li=el('li','it'+(i.done?' done':''));const cb=el('input');cb.type='checkbox';cb.checked=i.done;cb.setAttribute('aria-label','נקנה: '+i.t);
   cb.addEventListener('change',()=>{i.done=cb.checked;render();api({t:'done',id:i.id,done:i.done})});
   const sp=el('span',null,i.t);li.append(cb,sp);li.dataset.id=i.id;
-  if(!i.done&&D.seps.length){ // tap the item: ↑ ↓ moves it to the line above / below (Pablo 27.11: long press was not found)
+  if(!i.done){ // tap the item: ↑ ↓ moves it one step, past an item or a line (Pablo 27.11: long press was not found)
     sp.style.cursor='pointer';sp.addEventListener('click',()=>arrows(i));
     sp.addEventListener('contextmenu',e=>{e.preventDefault();arrows(i)})}
   return li}
 let pop=null;
 function closePop(){if(pop){pop.remove();pop=null}}
 document.addEventListener('click',e=>{if(pop&&!pop.contains(e.target))closePop()},true);
+const openRows=()=>D.rows.filter(x=>x.k==='sep'||!x.done); // top to bottom, as on Pablo's board
 function arrows(i){
-  const order=['',...D.seps.map(s=>s.id)];
-  const at=()=>order.indexOf(order.includes(i.sec)?i.sec:'');
+  const at=()=>openRows().indexOf(i);
   const show=()=>{closePop();const li=document.querySelector('li.it[data-id="'+i.id+'"]');if(!li)return;
     pop=el('div','pop');const up=el('button',null,'↑'),dn=el('button',null,'↓');up.type=dn.type='button';
-    up.disabled=at()<=0;dn.disabled=at()>=order.length-1;
+    up.disabled=at()<=0;dn.disabled=at()>=openRows().length-1;
     up.onclick=()=>go(-1);dn.onclick=()=>go(1);pop.append(up,dn);document.body.append(pop);
     const r=li.getBoundingClientRect();pop.style.top=(r.bottom+window.scrollY+4)+'px';li.scrollIntoView({block:'nearest',behavior:'smooth'})};
-  const go=d=>{const n=at()+d;if(n<0||n>=order.length)return;i.sec=order[n];render();show();api({t:'sec',id:i.id,sec:i.sec})};
+  const go=d=>{const rs=openRows(),k=rs.indexOf(i),n=k+d;if(k<0||n<0||n>=rs.length)return;
+    rs.splice(k,1);rs.splice(n,0,i);D.rows=rs.concat(D.rows.filter(x=>x.k!=='sep'&&x.done));render();show();api({t:'order',ids:rs.map(x=>x.id)})};
   show()}
 function render(err){
   const ul=$('list');ul.innerHTML='';
   if(err){ul.append(el('li','msg',err));$('f').hidden=$('h').hidden=$('b').hidden=$('dl').hidden=true;return}
   if(!D)return;
-  const open=D.items.filter(i=>!i.done),done=D.items.filter(i=>i.done);
-  open.filter(i=>!i.sec).forEach(i=>ul.append(itemEl(i)));
-  D.seps.forEach(s=>{const its=open.filter(i=>i.sec===s.id);if(!its.length)return;ul.append(el('li','sep',s.t));its.forEach(i=>ul.append(itemEl(i)))});
+  const open=D.rows.filter(i=>i.k!=='sep'&&!i.done),done=D.rows.filter(i=>i.k!=='sep'&&i.done);
+  openRows().forEach(x=>ul.append(x.k==='sep'?el('li','sep',x.t):itemEl(x)));
   if(!open.length)ul.append(el('li','msg','הרשימה ריקה 🎉'));
-  $('h').hidden=!D.seps.length;
+  $('h').hidden=false;
   const b=$('b'),dl=$('dl');b.hidden=!done.length;b.innerHTML='';dl.innerHTML='';dl.hidden=!(done.length&&showDone);
   if(done.length){
     const t=el('button',null,(showDone?'הסתר':'הצג')+' נקנו ('+done.length+')');t.type='button';t.onclick=()=>{showDone=!showDone;render()};
-    const c=el('button',null,'נקה את מה שנקנה');c.type='button';c.onclick=()=>{D.items=D.items.filter(i=>!i.done);render();api({t:'clear'})};
+    const c=el('button',null,'נקה את מה שנקנה');c.type='button';c.onclick=()=>{D.rows=D.rows.filter(i=>i.k==='sep'||!i.done);render();api({t:'clear'})};
     b.append(t,c);if(showDone)done.forEach(i=>dl.append(itemEl(i)))}
 }
 $('f').addEventListener('submit',e=>{e.preventDefault();const v=$('t').value.trim();if(!v)return;$('t').value='';
-  let text=v,sec='';const m=v.match(/^([^:]{1,30}):\s*(.+)$/),hit=m&&D&&D.seps.find(s=>s.t.trim()===m[1].trim());if(hit){sec=hit.id;text=m[2].trim()}
+  let text=v,store='';const m=v.match(/^([^:]{1,30}):\s*(.+)$/),hit=m&&D&&D.seps.find(s=>s.t.trim()===m[1].trim());if(hit){store=hit.t;text=m[2].trim()}
   const n=x=>x.replace(/\s+/g,' ').trim();
-  if(D&&D.items.some(i=>!i.done&&n(i.t)===n(text))){toast('כבר ברשימה: '+text);return} // no double "חלב"
-  if(D)D.items.push({id:'tmp',t:text,done:false,sec});render();api({t:'add',text,sec})});
+  if(D&&D.rows.some(i=>i.k!=='sep'&&!i.done&&n(i.t)===n(text))){toast('כבר ברשימה: '+text);return} // no double "חלב"
+  if(D){const rs=D.rows;let k=rs.findIndex(x=>x.k==='sep');if(hit){k=rs.indexOf(hit)+1;while(k<rs.length&&rs[k].k!=='sep')k++}if(k<0)k=rs.length;
+    rs.splice(k,0,{id:'tmp',t:text,k:'',done:false})}render();api({t:'add',text,store})});
 api({t:'get'});
 setInterval(()=>{if(!busy&&!pop&&!document.hidden&&document.activeElement!==$('t'))api({t:'get'})},20000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)api({t:'get'})});
