@@ -143,7 +143,7 @@ function inspCall_(sys, contents, opt) {
   if (opt.json) body.generationConfig.responseMimeType = 'application/json';
   if (opt.search) body.tools = [{ google_search: {} }];
   const tried = []; // what happened to each model, shown in the note's ⋯ menu (fix 28.11: Pablo asked why Flash answered)
-  const done = (res) => { P.setProperty('INSP_TRIED', JSON.stringify({ at: Date.now(), list: tried.slice(0, 8) })); log('insp model choice', tried.map(x => x.m + ': ' + x.c + (x.r ? ' (' + x.r + ')' : '')).join(' | ')); // every call (Pablo 28.11) return res; };
+  const done = (res) => { P.setProperty('INSP_TRIED', JSON.stringify({ at: Date.now(), list: tried.slice(0, 8) })); log('insp model choice', tried.map(x => x.m + ': ' + x.c + (x.r ? ' (' + x.r + ')' : '')).join(' | ')); return res; }; // logged every call (Pablo 28.11)
   // speed (Pablo 28.11 "it thinks a long time"): the model that answered last goes first for 6 hours,
   // so a conversation does not wait for the stronger ones to fail again on every message
   const good = c.get('insp_good_' + tag), order = inspModels_();
@@ -170,9 +170,9 @@ function inspCall_(sys, contents, opt) {
       } catch (e) { log('insp bad answer', model, r.getContentText().slice(0, 300)); c.put('insp_bad_' + tag + model, '1', 1800); continue; }
     }
     const txt = r.getContentText();
-    tried[tried.length - 1].r = inspWhy_(txt);
-    // no free quota at all for this model ("limit: 0") = like no access; busy: 30 min
-    c.put('insp_bad_' + tag + model, '1', code === 429 && !/limit:\s*0\b/.test(txt) || code >= 500 ? 1800 : 21600);
+    const why = tried[tried.length - 1].r = inspWhy_(txt);
+    // no free quota at all for this model ("limit: 0" / quotaValue 0) = like no access: 6 h; busy: 30 min
+    c.put('insp_bad_' + tag + model, '1', code === 429 && !/limit:?\s*0\b/.test(txt + ' ' + why) || code >= 500 ? 1800 : 21600);
   }
   return done(null);
 }
