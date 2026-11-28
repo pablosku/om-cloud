@@ -74,6 +74,7 @@ function fmt(d) {
 // ---------- incoming ----------
 function doPost(e) {
   if ((e.parameter || {}).s !== prop('URL_SECRET')) return out_('no');
+  if (e.parameter.action === 'board') return boardApi_(e); // Board.js: the board's calls when the Worker serves it
   if (e.parameter.action === 'fetched') { // the laptop's answers to a fetch job (Bills.gs)
     try { return out_(fetchDone_(e.parameter.id, JSON.parse(e.postData.contents))); }
     catch (err) { log('fetched error', String(err && err.stack || err)); return out_('error'); }

@@ -25,6 +25,7 @@ function doGet(e) {
     if (q.action === 'keepdone') return keepDone_(q); // Keep.gs
     if (q.action === 'shoppage') return shopPage_(q); // Board.js: the family page HTML, served by the Worker
     if (q.action === 'shop') return shopApi_(q); // Board.js: the family shopping page, through the Worker
+    if (q.action === 'boardpage') return boardPageText_(q); // Board.js: the board page served by the Worker (mic works there)
     if (q.action === 'wixdone') return wixDone_(q); // Wix.gs
   } catch (err) { log('doGet error', q.action, String(err && err.stack || err)); return out_('error'); }
   return out_('?');

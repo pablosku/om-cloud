@@ -28,7 +28,37 @@ function boardKey_() {
   if (!k) { k = Utilities.getUuid().replace(/-/g, ''); P.setProperty('BOARD_KEY', k); }
   return k;
 }
-function boardLink_() { return 'https://script.google.com/macros/s/' + BOARD_DEPLOY + '/exec?k=' + boardKey_(); }
+// 28.11 (v31): when Script Property BOARD_WORKER = 1, the board is served by the Cloudflare Worker (/board?k=KEY), a page
+// of its own and not inside Google's frame, so the microphone works. Only the key protects it there (like the family page).
+function boardLink_() {
+  if (prop('BOARD_WORKER') === '1') { const w = familyLink_(false); if (w) return w.replace(/\/shop\?f=.*$/, '/board?k=' + boardKey_()); }
+  return 'https://script.google.com/macros/s/' + BOARD_DEPLOY + '/exec?k=' + boardKey_();
+}
+// doGet ?s=URL_SECRET&action=boardpage&k=BOARD_KEY: the same page as text, for the Worker. google.script.run does not exist
+// there, so a small stand-in sends each call to the Worker (/board/api), which passes it to boardApi_ below.
+function boardPageText_(q) {
+  if (!prop('BOARD_KEY') || q.k !== prop('BOARD_KEY')) return out_('no');
+  const t = HtmlService.createTemplateFromFile('BoardPage'); t.boardKey = q.k;
+  const head = '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>הדף של פבלו</title>' +
+    '<link rel="manifest" href="/board/manifest.json?k=' + q.k + '"><link rel="apple-touch-icon" href="/shop/icon.png">' +
+    '<meta name="theme-color" content="#f6e6d6"><script>' + BOARD_SHIM + '</script>';
+  return ContentService.createTextOutput('<!doctype html>' + t.evaluate().getContent().replace(/^<!DOCTYPE html>/i, '').replace('<head>', '<head>' + head));
+}
+const BOARD_SHIM = `window.google={script:{get run(){let ok=function(){},bad=function(){};const p=new Proxy({},{get:function(_,fn){
+if(fn==='withSuccessHandler')return function(f){ok=f;return p};if(fn==='withFailureHandler')return function(f){bad=f;return p};
+return function(){const a=[].slice.call(arguments);fetch('/board/api'+location.search,{method:'POST',body:JSON.stringify({fn:fn,args:a})})
+.then(function(r){return r.json()}).then(function(j){j.err?bad(new Error(j.err)):ok(j.ok)}).catch(bad)}}});return p}}};`;
+// doPost ?s=URL_SECRET&action=board&k=BOARD_KEY, body {fn, args}: one board call from the Worker-served page
+function boardApi_(e) {
+  const k = e.parameter.k;
+  if (!prop('BOARD_KEY') || k !== prop('BOARD_KEY')) return json_({ err: 'not allowed' });
+  let b; try { b = JSON.parse(e.postData.contents); } catch (x) { return json_({ err: 'bad request' }); }
+  const api = { boardGet, boardOp, inspGet, inspSend, inspRate, inspDay }; // built here: other files load after this one
+  const f = Object.prototype.hasOwnProperty.call(api, b.fn) && api[b.fn];
+  if (!f) return json_({ err: 'unknown call' });
+  try { const r = f.apply(null, b.args || []); return json_({ ok: r === undefined ? null : r }); }
+  catch (err) { log('board api error', b.fn, String(err && err.stack || err)); return json_({ err: String(err && err.message || err) }); }
+}
 function boardOwner_(k) {
   if (k && prop('BOARD_KEY') && String(k) === prop('BOARD_KEY')) return true;
   try { const a = Session.getActiveUser().getEmail(); return !!a && a === Session.getEffectiveUser().getEmail(); }
