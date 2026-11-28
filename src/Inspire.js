@@ -172,7 +172,8 @@ function inspCall_(sys, contents, opt) {
     const txt = r.getContentText();
     const why = tried[tried.length - 1].r = inspWhy_(txt);
     // no free quota at all for this model ("limit: 0" / quotaValue 0) = like no access: 6 h; busy: 30 min
-    c.put('insp_bad_' + tag + model, '1', code === 429 && !/limit:?\s*0\b/.test(txt + ' ' + why) || code >= 500 ? 1800 : 21600);
+    // overloaded (5xx, like 503 at 07:22 on 28.11): 5 min only, Google's spikes are short
+    c.put('insp_bad_' + tag + model, '1', code >= 500 ? 300 : code === 429 && !/limit:?\s*0\b/.test(txt + ' ' + why) ? 1800 : 21600);
   }
   return done(null);
 }
@@ -191,7 +192,7 @@ function inspModels_() {
       .filter(m => (m.supportedGenerationMethods || []).indexOf('generateContent') >= 0).map(m => String(m.name).replace(/^models\//, ''));
     else log('insp models', r.getResponseCode());
   } catch (e) { log('insp models', String(e)); }
-  const list = inspRank_(names).slice(0, 6).concat(models()).filter((x, i, a) => a.indexOf(x) === i);
+  const list = inspRank_(names).slice(0, 10).concat(models()).filter((x, i, a) => a.indexOf(x) === i);
   c.put('insp_models', JSON.stringify(list), 21600);
   return list;
 }
