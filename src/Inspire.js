@@ -144,7 +144,11 @@ function inspCall_(sys, contents, opt) {
   if (opt.search) body.tools = [{ google_search: {} }];
   const tried = []; // what happened to each model, shown in the note's ⋯ menu (fix 28.11: Pablo asked why Flash answered)
   const done = (res) => { P.setProperty('INSP_TRIED', JSON.stringify({ at: Date.now(), list: tried.slice(0, 8) })); if (tried.length > 1 || !res) log('insp tried', tried.map(x => x.m + ':' + x.c).join(', ')); return res; };
-  for (const model of inspModels_()) {
+  // speed (Pablo 28.11 "it thinks a long time"): the model that answered last goes first for 6 hours,
+  // so a conversation does not wait for the stronger ones to fail again on every message
+  const good = c.get('insp_good_' + tag), order = inspModels_();
+  if (good && order.indexOf(good) > 0) { order.splice(order.indexOf(good), 1); order.unshift(good); }
+  for (const model of order) {
     if (Date.now() - t0 > INSP_MAX_MS) break;
     if (c.get('insp_bad_' + tag + model)) { tried.push({ m: model, c: 'skip' }); continue; }
     let r;
@@ -156,12 +160,13 @@ function inspCall_(sys, contents, opt) {
     tried.push({ m: model, c: code });
     if (code === 200) {
       try {
-        const cand = JSON.parse(r.getContentText()).candidates[0];
+        const resp = JSON.parse(r.getContentText()), cand = resp.candidates[0];
         const text = ((cand.content || {}).parts || []).filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
         if (!text) throw new Error('empty');
         const seen = {}, src = (((cand.groundingMetadata || {}).groundingChunks) || []).map(g => g.web).filter(w => w && w.uri)
           .filter(w => !seen[w.uri] && (seen[w.uri] = 1)).slice(0, 8).map(w => ({ u: w.uri, t: String(w.title || '') }));
-        return done({ text, model, src });
+        c.put('insp_good_' + tag, model, 21600);
+        return done({ text, model: String(resp.modelVersion || model), src }); // modelVersion = the real model behind "-latest"
       } catch (e) { log('insp bad answer', model, r.getContentText().slice(0, 300)); c.put('insp_bad_' + tag + model, '1', 1800); continue; }
     }
     const txt = r.getContentText();

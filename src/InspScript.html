@@ -24,10 +24,11 @@ const body=el('div',{className:'body'});
 const ta=el('textarea',{rows:1,placeholder:'התשובה שלך…'});ta.setAttribute('aria-label','התשובה שלך');ta.value=ls(DRAFT)||'';
 const up=btn('','שלח',()=>sendIt(),'up'), mic=btn('','הכתבה',()=>dictate(),'mic');mic.innerHTML=MIC;up.innerHTML=I_UP;
 const box=el('div',{className:'box2'},[ta,el('div',{className:'bar'},[up,mic])]);
-const archB=btn('ימים קודמים ▾','ימים קודמים',()=>{open.arch=!open.arch;renderPast()}), modelT=el('span');
-const arch=el('div',{className:'arch'},[archB,modelT]), pastEl=el('div',{className:'past'});pastEl.hidden=true;
+const modelL=el('div',{className:'mline'}); // which model answered, small, under the box (Pablo 28.11)
+const archB=btn('ימים קודמים ▾','ימים קודמים',()=>{open.arch=!open.arch;renderPast()});
+const arch=el('div',{className:'arch'},[archB]), pastEl=el('div',{className:'past'});pastEl.hidden=true;
 const dots=btn('⋯','גודל הטקסט',()=>openPop(dots,sizePop),'dots');
-sec.append(fv,ih,body,box,arch,pastEl,dots);
+sec.append(fv,ih,body,box,modelL,arch,pastEl,dots);
 
 /* ---------- size (per device, in BOARD_VIEW) ---------- */
 const sizeKey=()=>'insp_'+DEV, size=()=>V[sizeKey()]||1;
@@ -92,7 +93,8 @@ function inspRender(){
     else if(failed){const f=el('div',{className:'b om fail',textContent:'לא הגיעה תשובה.'});f.append(btn('נסה שוב','נסה שוב',()=>sendIt(true)));chat.append(f)}
     body.append(chat)}
   box.hidden=!D;up.disabled=busy;
-  modelT.textContent=D&&D.model?'· '+D.model.replace(/^gemini-/,'Gemini '):'';
+  const lastM=D&&([...D.chat].reverse().find(m=>m.m)||{}).m||D&&D.model||'';
+  modelL.textContent=lastM?'ענה: '+lastM.replace(/^models\//,''):'';modelL.hidden=!D||!lastM;
   arch.hidden=!past.length;renderPast();applySize()}
 function renderPast(){
   pastEl.hidden=!open.arch;archB.textContent='ימים קודמים '+(open.arch?'▴':'▾');if(!open.arch)return;

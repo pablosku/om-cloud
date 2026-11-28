@@ -48,6 +48,7 @@ const mock = (() => {
   assert(await p.$eval('#insp textarea', t => t.value) === '', 'box empties after send');
   assert((await p.textContent('#insp .chat .b.om')).includes('תפיסה') && await p.$eval('#insp .chat .b.om b', b => b.textContent) === 'תפיסה', 'reply shown, **bold** rendered');
   assert(await p.$$eval('#insp .steps i.on', x => x.length) === 2, 'stage dots follow the stage');
+  assert(await p.textContent('#insp .mline') === 'ענה: gemini-2.5-pro' && await p.isVisible('#insp .mline'), 'the model that answered shows under the box');
   if (shot) await p.screenshot({ path: shot + '/insp-board.png' });
   await p.fill('#insp textarea', 'כן, נמשיך'); await p.click('#insp .bar .up'); await p.waitForTimeout(100);
   assert(await p.$$eval('#insp .rate button', x => x.length) === 9, 'chapters 2-3: 3 rating buttons per chapter');
