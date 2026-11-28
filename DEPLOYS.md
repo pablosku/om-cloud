@@ -5,6 +5,7 @@ Live web-app deployment: `AKfycbwtF-…BQwCyDVpIQ` (same URL every time, the Wor
 
 | OM version | Date | Apps Script version | Commit | Changes |
 |---|---|---|---|---|
+| v31 | 28.11.2026 | @33 | ec696fb | inspiration: live wait status (inspStatus), 5xx skip 5 min, up to 10 fallback models, compact full screen (#31) |
 | v30 | 28.11.2026 | @32 | 28a96ab | inspiration fixes: mic stop/timeout, SVG header icons, pinned source in full screen, model shown + 'insp model choice' log, 6h model cache (#29) |
 | v29 | 28.11.2026 | @31 | 9ef1059 | morning inspiration: daily Gemini mentor chat on the board (Inspire.js, InspStyle/InspScript.html, sheet insp_days) (#27) |
 | v28 | 28.11.2026 | @30 | a9ff093 | dividers in every note, item menu (↑↓ ✎ move), row colours, reminder lines, new reminder form, fold buttons, family ↑↓; code split (Shop.js, BoardStyle/BoardScript.html) + tests (#25) |
@@ -40,3 +41,4 @@ v27: DEPLOYED 27.11.2026 ~20:30 Israel (Apps Script @29), bot + board both @29, 
 v28: DEPLOYED 28.11.2026 ~06:00 Israel (Apps Script @30), bot + board both @30, main @a9ff093, 15 src hashes matched (tests/ not pushed), plain push of 16 files. Approved by Pablo in the board thread ("תכניס לגרסה ושדר"). Backup v27: C:\Users\ASUS\om-cloud-backup-v27. Rollback: -V 29.
 v29: DEPLOYED 28.11.2026 ~06:52 Israel (Apps Script @31), bot + board both @31, main @9ef1059, 18 src hashes matched (tests/ not pushed), plain push of 19 files. Approved by Pablo on the card in thread "Add morning inspiration to dashboard". Backup v28: C:\Users\ASUS\om-cloud-backup-v28. Rollback: -V 30.
 v30: DEPLOYED 28.11.2026 ~07:20 Israel (Apps Script @32), bot + board both @32, main @28a96ab, 18 src hashes matched, plain push of 19 files. Approved by Pablo in the inspiration thread ("כן"). Backup v29: C:\Users\ASUS\om-cloud-backup-v29. Rollback: -V 31.
+v31: DEPLOYED 28.11.2026 ~07:36 Israel (Apps Script @33), bot + board both @33, main @ec696fb, 18 src hashes matched, plain push of 19 files. Approved by Pablo on the card in the inspiration thread. Backup v30: C:\Users\ASUS\om-cloud-backup-v30. Rollback: -V 32.
