@@ -54,7 +54,7 @@ function inspGet(k) {
     d = inspMake_(today);
     if (!d) return { err: 'busy', past: inspPast_(today) };
   }
-  return { day: inspObj_(d), past: inspPast_(today) };
+  return { day: inspObj_(d), past: inspPast_(today), tried: inspTried_(), models: inspModels_().slice(0, 8) };
 }
 
 // text = Pablo's answer ('' = ask again for an answer to the last message, after a failure)
@@ -83,7 +83,7 @@ function inspSend(text, k) {
   if (st === 4 && !d.chat.some(x => x.fb)) msg.fb = true; // the rating buttons go under this message
   d.chat.push(msg); d.stage = st; d.model = a.model;
   inspSave_(inspRow_(today), d);
-  return { day: d };
+  return { day: d, tried: inspTried_() };
 }
 
 function inspRate(ch, v, k) {
@@ -142,15 +142,18 @@ function inspCall_(sys, contents, opt) {
   const body = { system_instruction: { parts: [{ text: sys }] }, contents, generationConfig: { temperature: 0.9 } };
   if (opt.json) body.generationConfig.responseMimeType = 'application/json';
   if (opt.search) body.tools = [{ google_search: {} }];
+  const tried = []; // what happened to each model, shown in the note's ⋯ menu (fix 28.11: Pablo asked why Flash answered)
+  const done = (res) => { P.setProperty('INSP_TRIED', JSON.stringify({ at: Date.now(), list: tried.slice(0, 8) })); if (tried.length > 1 || !res) log('insp tried', tried.map(x => x.m + ':' + x.c).join(', ')); return res; };
   for (const model of inspModels_()) {
     if (Date.now() - t0 > INSP_MAX_MS) break;
-    if (c.get('insp_bad_' + tag + model)) continue;
+    if (c.get('insp_bad_' + tag + model)) { tried.push({ m: model, c: 'skip' }); continue; }
     let r;
     try {
       r = UrlFetchApp.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         { method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': prop('GEMINI_KEY') }, payload: JSON.stringify(body), muteHttpExceptions: true });
-    } catch (e) { log('insp fetch', model, String(e)); continue; }
+    } catch (e) { log('insp fetch', model, String(e)); tried.push({ m: model, c: 'net' }); continue; }
     const code = r.getResponseCode();
+    tried.push({ m: model, c: code });
     if (code === 200) {
       try {
         const cand = JSON.parse(r.getContentText()).candidates[0];
@@ -158,13 +161,15 @@ function inspCall_(sys, contents, opt) {
         if (!text) throw new Error('empty');
         const seen = {}, src = (((cand.groundingMetadata || {}).groundingChunks) || []).map(g => g.web).filter(w => w && w.uri)
           .filter(w => !seen[w.uri] && (seen[w.uri] = 1)).slice(0, 8).map(w => ({ u: w.uri, t: String(w.title || '') }));
-        return { text, model, src };
+        return done({ text, model, src });
       } catch (e) { log('insp bad answer', model, r.getContentText().slice(0, 300)); c.put('insp_bad_' + tag + model, '1', 1800); continue; }
     }
-    log('insp', model, code, r.getContentText().slice(0, 200));
-    c.put('insp_bad_' + tag + model, '1', code === 429 || code >= 500 ? 1800 : 21600); // busy: 30 min, no access: 6 h
+    const txt = r.getContentText();
+    log('insp', model, code, txt.slice(0, 200));
+    // no free quota at all for this model ("limit: 0") = like no access; busy: 30 min
+    c.put('insp_bad_' + tag + model, '1', code === 429 && !/limit:\s*0\b/.test(txt) || code >= 500 ? 1800 : 21600);
   }
-  return null;
+  return done(null);
 }
 
 // models for the conversation, strongest first, then the bot's list as the last fallback
@@ -215,6 +220,7 @@ function inspRatingsNote_() {
 }
 
 // ---------- sheet ----------
+function inspTried_() { try { return JSON.parse(prop('INSP_TRIED') || 'null'); } catch (e) { return null; } }
 function inspToday_() { return Utilities.formatDate(new Date(), userTz(), 'yyyy-MM-dd'); }
 function inspRow_(date) {
   const t = tab_('insp_days', INSP_H), v = t.getDataRange().getValues();

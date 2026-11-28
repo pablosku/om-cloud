@@ -26,6 +26,8 @@ const mock = (() => {
       setTimeout(() => ok({ day: JSON.parse(JSON.stringify(day)) }), 30); },
     inspRate(ch, v) { calls.push(['rate', ch, v]); },
     inspDay(dt) { setTimeout(() => ok({ date: dt, src: 'גיטה 2:47', story: 'סיפור', chat: [{ r: 'me', t: 'תשובה ישנה' }], ratings: {} }), 10); } }; return o; }
+  // a speech recognizer that starts but never hears anything (what happens inside Google's page frame)
+  window.SpeechRecognition = window.webkitSpeechRecognition = function () { this.start = () => { window.__micStarts = (window.__micStarts || 0) + 1; }; this.abort = () => {}; this.stop = () => {}; };
   window.google = { script: { get run() { return R(); } } };
 }).toString();
 
@@ -59,6 +61,9 @@ const mock = (() => {
   await p.click('#insp .ih button[aria-label="מסך מלא"]');
   const box = await p.$eval('#insp .box2', b => b.getBoundingClientRect().bottom);
   assert(await p.$eval('#insp', s => s.classList.contains('full')) && box > 800, 'full screen: answer box at the bottom');
+  await p.$eval('#insp .body', b => { b.scrollTop = b.scrollHeight; });
+  const vt = await p.$eval('#insp .vhead', v => v.getBoundingClientRect().top), bt = await p.$eval('#insp .body', b => b.getBoundingClientRect().top);
+  assert(Math.abs(vt - bt) < 2, 'full screen: the verse stays pinned at the top while the text scrolls');
   if (shot) await p.screenshot({ path: shot + '/insp-full.png' });
   await p.click('#insp .ih button[aria-label="קפל את ההשראה"]');
   assert(await p.$eval('#insp', s => s.classList.contains('folded') && !s.classList.contains('full')), '− in full screen folds and leaves full screen');
@@ -69,6 +74,13 @@ const mock = (() => {
   await p.click('#insp .fv button');
   await p.click('#insp .arch button'); await p.click('#insp .past > button'); await p.waitForTimeout(50);
   assert((await p.textContent('#insp .past .old')).includes('תשובה ישנה'), 'past days open from the archive');
+  const on = () => p.$eval('#insp .mic', m => m.classList.contains('on'));
+  await p.click('#insp .mic'); const a1 = await on(); await p.click('#insp .mic');
+  assert(a1 && !(await on()), 'mic: a second tap always turns it off');
+  await p.click('#insp .mic'); await p.waitForTimeout(4300);
+  assert(!(await on()) && (await p.textContent('#toast')).includes('המקלדת'), 'mic: no sound in 4 s -> stops and points to the keyboard mic');
+  await p.click('#insp .mic');
+  assert(!(await on()) && await p.evaluate(() => window.__micStarts) === 2 && await p.evaluate(() => document.activeElement.tagName) === 'TEXTAREA', 'mic: after that, a tap opens the keyboard instead');
   assert(!errs.length, 'no page errors ' + errs.join('; '));
   await br.close();
 })();
