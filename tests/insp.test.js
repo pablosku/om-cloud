@@ -63,7 +63,15 @@ const mock = (() => {
   assert(await p.$eval('#insp', s => s.style.getPropertyValue('--is')) === '1.1' && await p.textContent('#pop .isz span') === '110%', '⋯ menu: א+ makes the chat text bigger');
   assert(await p.$$eval('#pop button', x => x.length) === 2, '⋯ menu holds only א− א+');
   await p.click('#today');
+  await p.evaluate(() => scrollTo(0, 0));
+  assert(await p.$eval('#insp', s => s.getBoundingClientRect().height) <= 844, 'note mode: a long chat never makes the note taller than the screen');
+  assert(await p.$eval('#insp .body', b => b.scrollHeight > b.clientHeight && b.scrollTop > 0), 'note mode: the text scrolls inside the note, at the newest message');
+  if (shot) await p.screenshot({ path: shot + '/insp-note.png' });
   await p.click('#insp .ih button[aria-label="מסך מלא"]');
+  assert(await p.isHidden('#insp .ih .ttl') && await p.isHidden('#insp .ih .steps') && await p.isHidden('#insp .vhead .src'), 'full screen: no title, no stage dots, no source');
+  const hb = await p.$eval('#insp .ih', h => h.getBoundingClientRect()), vr = await p.$eval('#insp .vhead .verse', v => v.getBoundingClientRect());
+  assert(hb.right <= vr.left + 2 || hb.bottom <= vr.top, 'full screen: the buttons do not cover the verse');
+  assert(await p.$eval('#insp .vhead .verse', v => v.clientHeight >= v.scrollHeight - 2), 'full screen: the whole verse shows (up to 3 lines)');
   const box = await p.$eval('#insp .box2', b => b.getBoundingClientRect().bottom);
   assert(await p.$eval('#insp', s => s.classList.contains('full')) && box > 800, 'full screen: answer box at the bottom');
   await p.$eval('#insp .body', b => { b.scrollTop = b.scrollHeight; });

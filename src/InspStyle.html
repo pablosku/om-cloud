@@ -62,10 +62,17 @@
 .insp.full .vhead{position:sticky;top:0;z-index:1;background:var(--note,var(--note-def,var(--note-auto)));padding-bottom:6px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
 /* full screen (Pablo 28.11): a small verse at the top, at most 3 lines, so the conversation gets the screen */
 .insp.full .vhead .verse{font-size:.92em;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-/* an empty answer box is one line: text and buttons side by side */
-.insp.full .box2.empty{flex-direction:row;align-items:center;padding:6px 8px 6px 12px}
-.insp.full .box2.empty textarea{min-height:0}
+/* an empty answer box is one line (note and full screen): text and buttons side by side */
+.insp .box2.empty{flex-direction:row;align-items:center;padding:6px 8px 6px 12px}
+.insp .box2.empty textarea{min-height:0}
 .insp.full .arch,.insp.full .dots,.insp.full .past{display:none}
+/* full screen (Pablo 28.11): no title, no stage dots, no source: only the verse, the conversation and the box */
+.insp.full .ih{position:absolute;top:max(8px,env(safe-area-inset-top,0px));left:12px;z-index:2;gap:6px}
+.insp.full .ih .ttl,.insp.full .ih .steps,.insp.full .vhead .src{display:none}
+.insp.full .vhead{padding-left:92px;min-height:40px;justify-content:center;flex:none}
+.insp.full .vhead .verse{flex:none}
+/* note (not full screen): never taller than the screen. The text scrolls inside it and opens at the newest message */
+.insp:not(.full):not(.folded) .body{max-height:calc(100svh - 250px);overflow:auto;overscroll-behavior:contain}
 body.insp-full{overflow:hidden}
 .pop .isz{display:flex;align-items:center;gap:8px;white-space:nowrap}
 .pop .mtried{display:flex;flex-direction:column;gap:2px;font-size:.75rem;color:var(--muted);border-top:1px solid var(--line);padding-top:6px;margin-top:2px}

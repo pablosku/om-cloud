@@ -320,11 +320,11 @@ function command(text) {
 
 // ---------- every minute ----------
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
-const VERSION = '31';
-const RELEASE_NOTES = '🆕 גרסה 31 עלתה. פתק ההשראה:\n\n' +
-  '1. בזמן ההמתנה כתוב מה קורה, למשל "Google עמוסה (3.8-flash), מנסה 3.6-flash…". אחרי 20 שניות מופיע גם כמה זמן עבר.\n' +
-  '2. כש-Google עמוסה (503), OM עובר מהר לדגם הבא ומנסה שוב את העמוס אחרי 5 דקות. יש גם יותר דגמי גיבוי (עד 10).\n' +
-  '3. במסך מלא: תיבת כתיבה ריקה תופסת שורה אחת, והפסוק למעלה קטן יותר (עד 3 שורות).';
+const VERSION = '32';
+const RELEASE_NOTES = '🆕 גרסה 32 עלתה. פתק ההשראה:\n\n' +
+  '1. במסך מלא: בלי כותרת, בלי נקודות ההתקדמות ובלי המקור. נשארים רק הפסוק, השיחה ותיבת הכתיבה.\n' +
+  '2. במצב פתק: הפתק לא גדל יותר מגובה המסך. השיחה נגללת בתוך הפתק ונפתחת על ההודעה האחרונה.\n' +
+  '3. תיבת כתיבה ריקה תופסת שורה אחת גם במצב פתק.';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },

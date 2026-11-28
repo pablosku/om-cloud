@@ -96,7 +96,8 @@ function inspRender(){
   box.hidden=!D;up.disabled=busy;
   const lastM=D&&([...D.chat].reverse().find(m=>m.m)||{}).m||D&&D.model||'';
   modelL.textContent=lastM?'ענה: '+lastM.replace(/^models\//,''):'';modelL.hidden=!D||!lastM;
-  arch.hidden=!past.length;renderPast();applySize()}
+  arch.hidden=!past.length;renderPast();applySize();
+  if(D&&D.chat.length&&!inspRender.done){inspRender.done=1;setTimeout(()=>{body.scrollTop=body.scrollHeight},0)}}
 function renderPast(){
   pastEl.hidden=!open.arch;archB.textContent='ימים קודמים '+(open.arch?'▴':'▾');if(!open.arch)return;
   pastEl.innerHTML='';
@@ -139,7 +140,7 @@ function waitTxt(){if(!waitEl)return;const s=waitSt,sec=Math.round((Date.now()-w
   if(sec>=20)t+=` · ${sec} שנ׳`;if(sec>=60)t+=' · עמוס כרגע, ממתין';
   waitEl.textContent=t}
 function scrollEnd(){const last=body.querySelector('.chat>:last-child');if(!last)return;
-  if(full)body.scrollTop=body.scrollHeight;else last.scrollIntoView({block:'nearest',behavior:'smooth'})}
+  body.scrollTop=body.scrollHeight;if(!full)box.scrollIntoView({block:'nearest',behavior:'smooth'})} // the note scrolls inside itself now
 
 /* ---------- typing and dictation ---------- */
 ta.addEventListener('input',()=>{grow();ls(DRAFT,ta.value)});
