@@ -97,7 +97,7 @@ document.getElementById('gear').addEventListener('click',e=>{const g=e.currentTa
 
 /* ---------- quote ---------- */
 function renderQuote(){
-  const q=S&&S.quote; document.getElementById('quote').hidden=!q; if(!q)return;
+  const q=S&&S.quote; document.getElementById('quote').hidden=!q||!!(window.inspActive&&inspActive()); if(!q)return;
   document.getElementById('qt').textContent=q.s;document.getElementById('qc').textContent=q.c;document.getElementById('qs').textContent=q.src;
   const b=document.getElementById('qmin');document.getElementById('qbody').hidden=!V.qopen;b.textContent=V.qopen?'−':'+';
   b.setAttribute('aria-expanded',String(!!V.qopen));b.setAttribute('aria-label',V.qopen?'סגור פרשנות':'פתח פרשנות');
@@ -383,6 +383,7 @@ document.getElementById('remAdd').addEventListener('click',e=>remNewPop(e.curren
 
 function renderAll(){
   document.getElementById('today').textContent=new Intl.DateTimeFormat('he-IL',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
+  if(window.inspRender)inspRender();
   if(!S)return; renderQuote(); renderLists(); renderCal();
 }
 try{const c=JSON.parse(localStorage.getItem(CACHE));if(c&&c.S){S=c.S;Object.assign(V,c.V||{})}}catch(e){}

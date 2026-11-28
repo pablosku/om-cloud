@@ -1,0 +1,63 @@
+<style>
+/* the morning inspiration note (Inspire.js + InspScript.html). Approved mockup 5, 28.11: /mnt/project-files/board/inspiration-mockup-5.png */
+.insp{--is:1;padding:12px 16px 30px;display:flex;flex-direction:column;gap:10px;font-family:var(--item)}
+.insp .ih{display:flex;align-items:center;gap:8px}
+.insp .ttl{color:var(--accent);font-weight:600;font-size:calc(var(--item-s) * 1.05)}
+.insp .steps{display:flex;gap:4px;margin-inline-start:auto;align-items:center}
+.insp .steps i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.insp .steps i.on{background:var(--accent)}
+.insp .steps i.now{box-shadow:0 0 0 3px var(--accent-soft)}
+.insp .hb{border:1px solid var(--line);border-radius:8px;padding:0;width:32px;height:30px;font-size:1rem;color:var(--muted);background:none;line-height:1;flex:none}
+.insp .body{display:flex;flex-direction:column;gap:10px;font-size:calc(1rem * var(--is))}
+.insp .src{font-family:var(--ui);font-size:.78em;color:var(--muted)}
+.insp .verse{margin:0;font-size:1.08em;line-height:1.65;font-weight:600}
+.insp .story,.insp .ask{margin:0;line-height:1.7}
+.insp .ask{color:var(--accent);font-weight:600}
+.insp .chat{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.insp .chat:empty{display:none}
+.insp .b{max-width:88%;padding:8px 11px;border-radius:14px;line-height:1.6;overflow-wrap:anywhere}
+.insp .b p{margin:0 0 .5em}.insp .b p:last-child{margin:0}
+.insp .b .h{display:block;font-weight:700;margin:.3em 0 .2em}
+.insp .b .li{display:block;padding-inline-start:1em;text-indent:-1em}
+.insp .b.me{align-self:flex-start;background:var(--paper);border:1px solid var(--line);border-start-start-radius:4px;white-space:pre-wrap}
+.insp .b.om{align-self:flex-end;background:var(--accent-soft);border-start-end-radius:4px}
+.insp .b.wait{color:var(--muted);font-family:var(--ui)}
+.insp .b.fail{color:var(--warn)}
+.insp .b.fail button{margin-inline-start:8px;font-size:.85em}
+.insp .srcs{margin-top:8px;padding-top:6px;border-top:1px solid var(--edge);font-family:var(--ui);font-size:.8em;display:flex;flex-wrap:wrap;gap:4px 10px}
+.insp .srcs a{color:var(--muted)}
+.insp .rate{align-self:stretch;display:flex;flex-direction:column;gap:8px;font-family:var(--ui);font-size:.85em;padding:8px 0}
+.insp .rate .rr{display:flex;flex-direction:column;gap:4px}
+.insp .rate .ch{display:flex;gap:6px;flex-wrap:wrap}
+.insp .rate button{border-radius:99px;font-size:.92em;padding:3px 10px}
+.insp .rate button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--paper)}
+.insp .box2{display:flex;flex-direction:column;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:10px 12px 8px;box-shadow:0 1px 3px var(--shadow-soft)}
+.insp .box2 textarea{font:inherit;font-family:var(--item);font-size:calc(1rem * var(--is));line-height:1.6;border:0;padding:2px;background:none;color:var(--ink);resize:none;min-height:44px;outline:none;width:100%;overflow:hidden}
+.insp .bar{display:flex;gap:8px;direction:ltr}
+.insp .bar button{width:38px;height:38px;border-radius:50%;padding:0;display:grid;place-content:center;border:0}
+.insp .bar .up{background:var(--accent);color:var(--paper);font-size:1.15rem;font-weight:700}
+.insp .bar .up:disabled{opacity:.4;cursor:default}
+.insp .bar .mic{background:none;color:var(--muted)}
+.insp .bar .mic.on{color:var(--paper);background:var(--warn);animation:inspPulse 1.2s infinite}
+@keyframes inspPulse{50%{opacity:.6}}
+.insp .arch{font-family:var(--ui);font-size:.8rem;color:var(--muted);display:flex;gap:10px;align-items:center}
+.insp .arch button{border:0;background:none;color:inherit;padding:2px 0}
+.insp .past{display:flex;flex-direction:column;gap:6px;font-family:var(--ui);font-size:.85rem}
+.insp .past>button{text-align:start;border:0;background:none;padding:4px 0;color:var(--ink);border-bottom:1px solid var(--line);border-radius:0}
+.insp .past>button span{color:var(--muted);margin-inline-end:6px}
+.insp .past .old{display:flex;flex-direction:column;gap:8px;padding:6px 0 10px;font-family:var(--item)}
+.insp .dots{position:absolute;left:8px;bottom:2px;border:0;background:none;color:var(--muted);font-size:20px;font-weight:700;padding:4px 10px;opacity:.6}
+.insp .fv{display:none;align-items:center;gap:10px}
+.insp .fv p{margin:0;flex:1;min-width:0;color:var(--accent);font-weight:600;font-size:calc(var(--item-s) * 1.05);line-height:1.6}
+.insp.folded{padding-bottom:12px}
+.insp.folded>:not(.fv){display:none}
+.insp.folded>.fv{display:flex}
+/* full screen: the note covers the page, the answer box stays at the bottom */
+.insp.full{position:fixed;inset:0;z-index:30;border-radius:0;border:0;padding:max(12px,env(safe-area-inset-top,0px)) 16px max(10px,env(safe-area-inset-bottom,0px));gap:8px}
+.insp.full .body{flex:1;overflow:auto;font-size:calc(1.08rem * var(--is));padding-bottom:6px}
+.insp.full .box2 textarea{font-size:calc(1.08rem * var(--is));max-height:40vh;overflow:auto}
+.insp.full .arch,.insp.full .dots,.insp.full .past{display:none}
+body.insp-full{overflow:hidden}
+.pop .isz{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.pop .isz button{padding:2px 10px;border-radius:8px}
+</style>
