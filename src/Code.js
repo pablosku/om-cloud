@@ -78,6 +78,7 @@ function doPost(e) {
     try { return out_(fetchDone_(e.parameter.id, JSON.parse(e.postData.contents))); }
     catch (err) { log('fetched error', String(err && err.stack || err)); return out_('error'); }
   }
+  if (e.parameter.action === 'mictest') return out_(micTest_(e.postData.contents)); // Worker /mictest (28.11)
   const u = JSON.parse(e.postData.contents);
   const c = CacheService.getScriptCache();
   if (c.get('u' + u.update_id)) return out_('ok'); // Telegram resend
@@ -214,9 +215,20 @@ function transcribe_(ref) {
   let audio;
   try { audio = UrlFetchApp.fetch('https://api.telegram.org/file/bot' + prop('TG_TOKEN') + '/' + f.result.file_path).getBlob().getBytes(); }
   catch (e) { log('voice download', String(e)); return null; }
-  const r = gemini_([{ inline_data: { mime_type: mime || 'audio/ogg', data: Utilities.base64Encode(audio) } },
-    { text: 'Transcribe this voice message word for word. It is usually Hebrew. Do not translate, summarize or add anything. Answer JSON only: {"text": "<the transcript>"}, or {"text": ""} if there is no speech.' }]);
+  const r = gemini_([{ inline_data: { mime_type: mime || 'audio/ogg', data: Utilities.base64Encode(audio) } }, { text: TRANSCRIBE_ }]);
   return r ? String(r.text || '').trim() : null;
+}
+const TRANSCRIBE_ = 'Transcribe this voice message word for word. It is usually Hebrew. Do not translate, summarize or add anything. Answer JSON only: {"text": "<the transcript>"}, or {"text": ""} if there is no speech.';
+
+// (28.11) microphone test page served by the Worker (/mictest): a browser recording -> text. Nothing is saved or sent anywhere else.
+// body: {"mime": "audio/webm;codecs=opus", "b64": "<audio>"}; answer: {"text": "..."} or {"error": "..."}
+function micTest_(body) {
+  let j;
+  try { j = JSON.parse(body); } catch (e) { return JSON.stringify({ error: 'bad body' }); }
+  const mime = String(j.mime || '').split(';')[0].trim();
+  if (!/^audio\/[\w.+-]+$/.test(mime) || !j.b64) return JSON.stringify({ error: 'bad audio' });
+  const r = gemini_([{ inline_data: { mime_type: mime, data: String(j.b64) } }, { text: TRANSCRIBE_ }]);
+  return JSON.stringify(r ? { text: String(r.text || '').trim() } : { error: 'gemini busy' });
 }
 
 // one Gemini call that answers JSON, trying each model in GEMINI_MODELS; null = all busy
