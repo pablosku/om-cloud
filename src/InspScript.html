@@ -17,10 +17,12 @@ let D=null, past=[], tried=null, mlist=[], state='load', busy=false, failed=fals
 try{const c=JSON.parse(ls(IC));if(c&&c.day&&c.day.date===today()){D=c.day;past=c.past||[];state='ok'}}catch(e){}
 
 const sec=document.getElementById('insp');
-const fv=el('div',{className:'fv'}), fvT=el('p'), plus=btn('','פתח את ההשראה',()=>setFold(false),'hb');plus.innerHTML=I_PLUS;fv.append(fvT,plus);
+const fv=el('div',{className:'fv'}), fvT=el('p'), plus=btn('','פתח את ההשראה',()=>setFull(true),'hb');plus.innerHTML=I_FULL;fv.append(fvT,plus);fvT.addEventListener('click',()=>setFull(true));
 const ttl=el('span',{className:'ttl'}), steps=el('span',{className:'steps'});
-const fullB=btn('','מסך מלא',()=>setFull(!full),'hb'), minB=btn('','קפל את ההשראה',()=>setFold(true),'hb');fullB.innerHTML=I_FULL;minB.innerHTML=I_MIN;
-const ih=el('div',{className:'ih'},[ttl,steps,fullB,minB]);
+// two states only (Pablo 28.11): one folded line, or full screen. − folds, ⋯ holds the text size
+const minB=btn('','קפל את ההשראה',()=>setFull(false),'hb');minB.innerHTML=I_MIN;
+const dots=btn('⋯','גודל הטקסט',()=>openPop(dots,sizePop),'hb dots');
+const ih=el('div',{className:'ih'},[ttl,steps,dots,minB]);
 const body=el('div',{className:'body'});
 const ta=el('textarea',{rows:1,placeholder:'התשובה שלך…'});ta.setAttribute('aria-label','התשובה שלך');ta.value=ls(DRAFT)||'';
 const up=btn('','שלח',()=>sendIt(),'up'), mic=btn('','הכתבה',()=>dictate(),'mic');mic.innerHTML=MIC;up.innerHTML=I_UP;
@@ -28,8 +30,7 @@ const box=el('div',{className:'box2'},[ta,el('div',{className:'bar'},[up,mic])])
 const modelL=el('div',{className:'mline'}); // which model answered, small, under the box (Pablo 28.11)
 const archB=btn('ימים קודמים ▾','ימים קודמים',()=>{open.arch=!open.arch;renderPast()});
 const arch=el('div',{className:'arch'},[archB]), pastEl=el('div',{className:'past'});pastEl.hidden=true;
-const dots=btn('⋯','גודל הטקסט',()=>openPop(dots,sizePop),'dots');
-sec.append(fv,ih,body,box,modelL,arch,pastEl,dots);
+sec.append(fv,ih,body,box,modelL);
 
 /* ---------- size (per device, in BOARD_VIEW) ---------- */
 const sizeKey=()=>'insp_'+DEV, size=()=>V[sizeKey()]||1;
@@ -42,10 +43,8 @@ function sizePop(p){p.classList.add('nm');const t=el('span',{textContent:Math.ro
 function applySize(){sec.style.setProperty('--is',size());grow()}
 
 /* ---------- fold / full screen ---------- */
-function setFold(f){V.fold=Object.assign({},V.fold);if(f)V.fold.insp=1;else delete V.fold.insp;if(f&&full)setFull(false);saveView();inspRender()}
 function setFull(f){full=f;sec.classList.toggle('full',f);document.body.classList.toggle('insp-full',f);
-  fullB.innerHTML=f?I_BACK:I_FULL;fullB.title=f?'חזרה לפתק':'מסך מלא';fullB.setAttribute('aria-label',fullB.title);
-  grow();if(f)setTimeout(()=>{body.scrollTop=body.scrollHeight},0);else sec.scrollIntoView({block:'start'})}
+  inspRender();if(f)setTimeout(()=>{body.scrollTop=body.scrollHeight},0)}
 
 /* ---------- text: escape, then **bold**, ### heading, - list, paragraphs ---------- */
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -73,7 +72,7 @@ function rateBox(){
 
 /* ---------- render ---------- */
 function inspRender(){
-  const folded=!!(V.fold||{}).insp&&!full;
+  const folded=!full;
   sec.hidden=state==='off';sec.classList.toggle('folded',folded);
   const q=document.getElementById('quote');if(q&&state!=='off')q.hidden=true;
   fvT.textContent='☀ '+(D?D.verse:'השראה יומית');
@@ -92,7 +91,7 @@ function inspRender(){
     D.chat.forEach(m=>{chat.append(bubble(m));if(m.fb)chat.append(rateBox())});
     if(busy){waitEl=el('div',{className:'b om wait'});waitTxt();chat.append(waitEl)}
     else if(failed){const f=el('div',{className:'b om fail',textContent:'לא הגיעה תשובה.'});f.append(btn('נסה שוב','נסה שוב',()=>sendIt(true)));chat.append(f)}
-    body.append(chat)}
+    body.append(chat,arch,pastEl)} // previous days at the end of the conversation
   box.hidden=!D;up.disabled=busy;
   const lastM=D&&([...D.chat].reverse().find(m=>m.m)||{}).m||D&&D.model||'';
   modelL.textContent=lastM?'ענה: '+lastM.replace(/^models\//,''):'';modelL.hidden=!D||!lastM;
@@ -139,7 +138,7 @@ function waitTxt(){if(!waitEl)return;const s=waitSt,sec=Math.round((Date.now()-w
   if(sec>=20)t+=` · ${sec} שנ׳`;if(sec>=60)t+=' · עמוס כרגע, ממתין';
   waitEl.textContent=t}
 function scrollEnd(){const last=body.querySelector('.chat>:last-child');if(!last)return;
-  if(full)body.scrollTop=body.scrollHeight;else last.scrollIntoView({block:'nearest',behavior:'smooth'})}
+  body.scrollTop=body.scrollHeight}
 
 /* ---------- typing and dictation ---------- */
 ta.addEventListener('input',()=>{grow();ls(DRAFT,ta.value)});

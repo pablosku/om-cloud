@@ -43,6 +43,13 @@ const mock = (() => {
   await p.click('#pop button[aria-label="למעלה"]'); await p.click('#pop button[aria-label="למעלה"]');
   assert(await rows(shop) === 'לחם|עגבניות|ירקות|מסמרים|כוסברה|טמבור', 'tap an item: ↑ ↑ (past a line), menu stays open');
   assert(await p.$$eval('#pop h3', x => x.length) === 0, 'shopping item menu has no "other note"');
+  { await off(); const hg = note('רעיונות') + ' li.item:has-text("טיול לגליל") .hg', w = () => p.$eval(note('רעיונות') + ' li.item:has-text("טיול לגליל")', l => l.classList.contains('waiting'));
+    await p.click(hg); await p.waitForTimeout(30); const w1 = await w();
+    await p.click(hg); await p.waitForTimeout(30);
+    assert(w1 && await w() && (await p.textContent('#pop h3')) === 'להסיר את ההמתנה?', 'clock on a waiting item asks before removing the waiting state');
+    await p.click('#pop button[aria-label="השאר ממתין"]'); assert(await w(), 'keep: still waiting');
+    await p.click(hg); await p.waitForTimeout(30); await p.click('#pop button[aria-label="הסר ממתין"]');
+    assert(!(await w()), 'yes: waiting removed'); }
   await off(); await p.fill(shop + ' .add input', 'ירקות: מלפפון'); await p.press(shop + ' .add input', 'Enter');
   assert(await rows(shop) === 'לחם|עגבניות|ירקות|מסמרים|כוסברה|מלפפון|טמבור', '"store: item" goes to the end of that part');
   await p.click(tk + ' li.item:has-text("טסט") .star');

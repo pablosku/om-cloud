@@ -9,6 +9,8 @@
 .insp .steps i.now{box-shadow:0 0 0 3px var(--accent-soft)}
 .insp .hb{border:1px solid var(--line);border-radius:10px;padding:0;width:38px;height:36px;color:var(--muted);background:none;flex:none;display:grid;place-items:center}
 .insp .hb svg{display:block}
+.insp .hb.dots{font-size:20px;font-weight:700;line-height:1}
+.insp .fv p{cursor:pointer}
 .insp .body{display:flex;flex-direction:column;gap:10px;font-size:calc(1rem * var(--is))}
 .insp .src{font-family:var(--ui);font-size:.78em;color:var(--muted)}
 .insp .verse{margin:0;font-size:1.08em;line-height:1.65;font-weight:600}
@@ -49,7 +51,6 @@
 .insp .past>button{text-align:start;border:0;background:none;padding:4px 0;color:var(--ink);border-bottom:1px solid var(--line);border-radius:0}
 .insp .past>button span{color:var(--muted);margin-inline-end:6px}
 .insp .past .old{display:flex;flex-direction:column;gap:8px;padding:6px 0 10px;font-family:var(--item)}
-.insp .dots{position:absolute;left:8px;bottom:2px;border:0;background:none;color:var(--muted);font-size:20px;font-weight:700;padding:4px 10px;opacity:.6}
 .insp .fv{display:none;align-items:center;gap:10px}
 .insp .fv p{margin:0;flex:1;min-width:0;color:var(--accent);font-weight:600;font-size:calc(var(--item-s) * 1.05);line-height:1.6}
 .insp.folded{padding-bottom:12px}
@@ -62,11 +63,16 @@
 .insp.full .vhead{position:sticky;top:0;z-index:1;background:var(--note,var(--note-def,var(--note-auto)));padding-bottom:6px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
 /* full screen (Pablo 28.11): a small verse at the top, at most 3 lines, so the conversation gets the screen */
 .insp.full .vhead .verse{font-size:.92em;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-/* an empty answer box is one line: text and buttons side by side */
-.insp.full .box2.empty{flex-direction:row;align-items:center;padding:6px 8px 6px 12px}
-.insp.full .box2.empty textarea{min-height:0}
-.insp.full .arch,.insp.full .dots,.insp.full .past{display:none}
+/* an empty answer box is one line (note and full screen): text and buttons side by side */
+.insp .box2.empty{flex-direction:row;align-items:center;padding:6px 8px 6px 12px}
+.insp .box2.empty textarea{min-height:0}
+/* full screen (Pablo 28.11): no title, no stage dots, no source: only the verse, the conversation and the box */
+.insp.full .ih{position:absolute;top:max(8px,env(safe-area-inset-top,0px));left:12px;z-index:2;gap:6px}
+.insp.full .ih .ttl,.insp.full .ih .steps,.insp.full .vhead .src{display:none}
+.insp.full .vhead{padding-left:92px;min-height:40px;justify-content:center;flex:none}
+.insp.full .vhead .verse{flex:none}
 body.insp-full{overflow:hidden}
+body.insp-full .pop,body.insp-full .toast{z-index:40} /* the size menu and messages show above the full screen */
 .pop .isz{display:flex;align-items:center;gap:8px;white-space:nowrap}
 .pop .mtried{display:flex;flex-direction:column;gap:2px;font-size:.75rem;color:var(--muted);border-top:1px solid var(--line);padding-top:6px;margin-top:2px}
 .pop .isz button{padding:2px 10px;border-radius:8px}

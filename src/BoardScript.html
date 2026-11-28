@@ -274,7 +274,8 @@ function itemEl(list,i){
       if(i.c&&!more){i.lastC=i.c;i.c=''}else{const n=COLORS.slice(1);i.c=n[(n.indexOf(i.c||'')+1)%n.length];i.lastC=i.c}send({t:'item.set',id:i.id,f:{c:i.c,lastC:i.lastC}});renderLists()},'cz'));
     const hg=btn('',i.wait?('ממתין'+(i.wait.note?': '+i.wait.note:'')+', '+sinceTxt(i.wait.since)):(TOUCH?'הקשה: ממתין. לחיצה ארוכה: הערה':'קליק: ממתין. דאבל קליק: הערה'),null,'hg'+(i.wait?' on':''));hg.innerHTML=CLOCK;
     let t=null;
-    hg.addEventListener('click',()=>{clearTimeout(t);t=setTimeout(()=>{i.wait=i.wait?null:{note:'',since:dayISO(0)};send({t:'item.set',id:i.id,f:{wait:i.wait}});renderLists()},TOUCH?0:260)});
+    hg.addEventListener('click',()=>{clearTimeout(t);t=setTimeout(()=>{if(i.wait)return waitOffPop(hg,i); // removing the waiting state always asks first (Pablo 28.11)
+      i.wait={note:'',since:dayISO(0)};send({t:'item.set',id:i.id,f:{wait:i.wait}});renderLists()},TOUCH?0:260)});
     hg.addEventListener('dblclick',e=>{clearTimeout(t);e.preventDefault();waitPop(hg,i)});
     longPress(hg,()=>{clearTimeout(t);waitPop(hg,i)});
     li.append(hg);
@@ -283,6 +284,9 @@ function itemEl(list,i){
   li.append(row);
   return li;
 }
+function waitOffPop(anchor,i){
+  openPop(anchor,p=>{p.append(el('h3',{textContent:'להסיר את ההמתנה?'}));
+    p.append(el('div',{className:'btns'},[btn('כן, הסר','הסר ממתין',()=>{i.wait=null;send({t:'item.set',id:i.id,f:{wait:null}});closePop();renderLists()},'primary'),btn('השאר','השאר ממתין',()=>closePop())]))})}
 function waitPop(anchor,i){
   openPop(anchor,p=>{
     p.append(el('h3',{textContent:'ממתין ל...'}));
