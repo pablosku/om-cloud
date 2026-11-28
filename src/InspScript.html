@@ -37,7 +37,7 @@ function sizePop(p){p.classList.add('nm');const t=el('span',{textContent:Math.ro
   p.append(el('div',{className:'isz'},[btn('א−','הקטן את הטקסט',()=>set(-.1)),t,btn('א+','הגדל את הטקסט',()=>set(.1))]));
   // which model answered, and why stronger ones did not (busy / no free access)
   const why=c=>c===429?'עמוס או בלי מכסה':c==='skip'?'דולג (נכשל קודם)':c===403||c===404||c===400?'אין גישה':c===200?'ענה':String(c);
-  if(tried&&tried.list&&tried.list.length)p.append(el('div',{className:'mtried'},tried.list.map(x=>el('span',{textContent:x.m.replace(/^gemini-/,'')+': '+why(x.c)}))))}
+  if(tried&&tried.list&&tried.list.length)p.append(el('div',{className:'mtried'},tried.list.map(x=>el('span',{textContent:x.m.replace(/^gemini-/,'')+': '+why(x.c),title:x.r||''}))))}
 function applySize(){sec.style.setProperty('--is',size());grow()}
 
 /* ---------- fold / full screen ---------- */
