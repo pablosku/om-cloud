@@ -102,6 +102,7 @@ function onMessage(m) {
   const text = (m.text || '').trim();
   if (!text) return send('כרגע אני מבין טקסט, הודעות קוליות ו-PDF להדפסה.');
   if (text.startsWith('/')) return command(text);
+  if (momCmd(text)) return; // Mom.js: "לאמא 260 דלק"
   if (/כרטיסי{1,2}ה|כרטיסיות/.test(text)) return cardCmd(text); // Reports.gs
   if (KLINKA_RE.test(text)) return klinkaCmd(text); // Reports.gs
   if (RETORNO_RE.test(text)) return retornoCmd(text); // Reports.gs
@@ -140,6 +141,7 @@ function handle(row, live) {
     t.getRange(row, 3).setValue('🎤 ' + tr); // the inbox keeps what was understood
     send('🎤 שמעתי: ' + tr);
     // a spoken report request goes where the typed one goes
+    if (momCmd(tr)) { t.getRange(row, 4).setValue('done'); return; } // Mom.js
     if (/כרטיסי{1,2}ה|כרטיסיות/.test(tr)) { t.getRange(row, 4).setValue('done'); return cardCmd(tr); } // Reports.gs
     if (KLINKA_RE.test(tr)) { t.getRange(row, 4).setValue('done'); return klinkaCmd(tr); }
     if (RETORNO_RE.test(tr)) { t.getRange(row, 4).setValue('done'); return retornoCmd(tr); }
@@ -256,6 +258,7 @@ function onButton(q) {
   if (act === 'pc' || act === 'pr' || act === 'pa') return printButton(q, act, k); // Print.gs
   if (act === 'rt') return retornoButton(q, k); // Reports.gs
   if (act === 'kc') return clinicButton(q, k, arg); // Clinic.gs
+  if (act === 'mm') return momButton(q, k, arg); // Mom.js
   if (act === 'ml' || act === 'mp') return mailButton(q, act, k, arg); // Mail.gs
   const o = unkey_(k);
   if (!o) return finish('לא מצאתי, אולי כבר טופלה');
@@ -315,16 +318,16 @@ function command(text) {
     P.setProperty('USER_TZ', z);
     return send('הבנתי, אתה ב-' + z + '. תזכורות חדשות יפורשו לפי השעון שם. תזכורות קיימות לא זזות.');
   }
-  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\nרשימת קניות בקיפ: "תוסיף לקניות חלב, ביצים ולחם"\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\nיומן קליניקה: "תוסיף טיפול לעדי ביום שלישי ב-11", "תמחק טיפול של עדי ביום שלישי", "תזיז טיפול של עדי ביום שלישי ל-12", "מה יש בקליניקה מחר" (תמיד מאשר איתך לפני שינוי)\n/clinic שעות קליניקה בחודש הנוכחי (או: "/clinic 10.26", "קליניקה עדי 10.26")\n"כרטיסייה עדי" / "עדי קנתה כרטיסייה 20.11" / "כרטיסיות"\n/retorno דוחות רטורנו לחודש שעבר (או: "רטורנו 11.26")\n/tz אזור זמן בחו״ל\n/bills חשבונות שמגיעים במייל (מי אביבים נשלח לכאן, מי מודיעין הדפסה)\nמייל ומסמכים: "מתי הגיעה החשבונית מחברת החשמל?", "תמצא לי את פוליסת הביטוח" (רק קורא, לא שולח ולא מוחק)\nדחייה לשעה אחרת: כפתור 🕐 שעה אחרת, או תשובה (reply) להתראה או לאישור עם "תדחה ל-17:10"');
+  return send('שלח לי תזכורת בטקסט חופשי, למשל:\n"מחר ב-8 להתקשר לאינסטלטור"\n"כל יום א׳–ה׳ ב-7:30 תרופה"\n\nלהדפסה: שלח PDF. בכיתוב (caption) אפשר: 2-4, צבע, צד אחד, בלי תמונות\n\nרשימת קניות בקיפ: "תוסיף לקניות חלב, ביצים ולחם"\n/list תזכורות קרובות\n/queue מה מחכה להדפסה\nיומן קליניקה: "תוסיף טיפול לעדי ביום שלישי ב-11", "תמחק טיפול של עדי ביום שלישי", "תזיז טיפול של עדי ביום שלישי ל-12", "מה יש בקליניקה מחר" (תמיד מאשר איתך לפני שינוי)\n/clinic שעות קליניקה בחודש הנוכחי (או: "/clinic 10.26", "קליניקה עדי 10.26")\n"כרטיסייה עדי" / "עדי קנתה כרטיסייה 20.11" / "כרטיסיות"\nחשבון אמא: "לאמא 260 דלק" (שורה חדשה לפני הסה״כ, אחרי אישור)\n/retorno דוחות רטורנו לחודש שעבר (או: "רטורנו 11.26")\n/tz אזור זמן בחו״ל\n/bills חשבונות שמגיעים במייל (מי אביבים נשלח לכאן, מי מודיעין הדפסה)\nמייל ומסמכים: "מתי הגיעה החשבונית מחברת החשמל?", "תמצא לי את פוליסת הביטוח" (רק קורא, לא שולח ולא מוחק)\nדחייה לשעה אחרת: כפתור 🕐 שעה אחרת, או תשובה (reply) להתראה או לאישור עם "תדחה ל-17:10"');
 }
 
 // ---------- every minute ----------
 // ---------- release notes: sent once, on the first tick after a new version is pushed ----------
-const VERSION = '31';
-const RELEASE_NOTES = '🆕 גרסה 31 עלתה. פתק ההשראה:\n\n' +
-  '1. בזמן ההמתנה כתוב מה קורה, למשל "Google עמוסה (3.8-flash), מנסה 3.6-flash…". אחרי 20 שניות מופיע גם כמה זמן עבר.\n' +
-  '2. כש-Google עמוסה (503), OM עובר מהר לדגם הבא ומנסה שוב את העמוס אחרי 5 דקות. יש גם יותר דגמי גיבוי (עד 10).\n' +
-  '3. במסך מלא: תיבת כתיבה ריקה תופסת שורה אחת, והפסוק למעלה קטן יותר (עד 3 שורות).';
+const VERSION = '32';
+const RELEASE_NOTES = '🆕 גרסה 32 עלתה. חשבון אמא:\n\n' +
+  '1. "לאמא 260 דלק" (או "תוסיף לאמא 260 דלק", גם בהקלטה) מציג את השורה ומבקש אישור.\n' +
+  '2. אחרי ✅ נוספת שורה עם התאריך, הסכום והפריט מתחת לשורה האחרונה ולפני הסה״כ, והסה״כ כולל אותה. התשובה מראה את היתרה החדשה.\n' +
+  '3. כפתור ↩️ בטל מוחק את השורה שנוספה.';
 // the Telegram "/" menu: one list for setup(), printSetup() and every new version (refreshed with the release notes)
 const BOT_COMMANDS = [
   { command: 'list', description: 'תזכורות קרובות' },
