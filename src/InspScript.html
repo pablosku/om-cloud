@@ -1,0 +1,144 @@
+<script>
+// the morning inspiration note (server: Inspire.js). Uses el, btn, V, saveView, DEV, openPop, closePop, toast, KEY from BoardScript.html.
+// Built once; inspRender() fills it. The typed answer survives every re-render (and a page reload: localStorage draft).
+(()=>{
+const IC='pablo-insp-v1', DRAFT='pablo-insp-draft';
+const MIC='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+const RATE=[['a','מדויק ומעמיק'],['b','טוב, אפשר להעמיק יותר'],['c','פחות רלוונטי עבורי']];
+const CH=[[1,'פרק 1 · פילוסופיה'],[2,'פרק 2 · פרקטיקה'],[3,'פרק 3 · חדשות טובות']];
+const STAGE=['פרק 1: איך אתה מבין','דיון','איפה זה פוגש אותך','פרקים 2–3'];
+const ls=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}};
+const today=()=>isoDay(new Date());
+let D=null, past=[], state='load', busy=false, failed=false, full=false, open={}, rec=null;
+try{const c=JSON.parse(ls(IC));if(c&&c.day&&c.day.date===today()){D=c.day;past=c.past||[];state='ok'}}catch(e){}
+
+const sec=document.getElementById('insp');
+const fv=el('div',{className:'fv'}), fvT=el('p'), plus=btn('+','פתח את ההשראה',()=>setFold(false),'hb');fv.append(fvT,plus);
+const ttl=el('span',{className:'ttl'}), steps=el('span',{className:'steps'});
+const fullB=btn('⤢','מסך מלא',()=>setFull(!full),'hb'), minB=btn('−','קפל את ההשראה',()=>setFold(true),'hb');
+const ih=el('div',{className:'ih'},[ttl,steps,fullB,minB]);
+const body=el('div',{className:'body'});
+const ta=el('textarea',{rows:1,placeholder:'התשובה שלך…'});ta.setAttribute('aria-label','התשובה שלך');ta.value=ls(DRAFT)||'';
+const up=btn('↑','שלח',()=>sendIt(),'up'), mic=btn('','הכתבה',()=>dictate(),'mic');mic.innerHTML=MIC;
+const box=el('div',{className:'box2'},[ta,el('div',{className:'bar'},[up,mic])]);
+const archB=btn('ימים קודמים ▾','ימים קודמים',()=>{open.arch=!open.arch;renderPast()}), modelT=el('span');
+const arch=el('div',{className:'arch'},[archB,modelT]), pastEl=el('div',{className:'past'});pastEl.hidden=true;
+const dots=btn('⋯','גודל הטקסט',()=>openPop(dots,sizePop),'dots');
+sec.append(fv,ih,body,box,arch,pastEl,dots);
+
+/* ---------- size (per device, in BOARD_VIEW) ---------- */
+const sizeKey=()=>'insp_'+DEV, size=()=>V[sizeKey()]||1;
+function sizePop(p){p.classList.add('nm');const t=el('span',{textContent:Math.round(size()*100)+'%'});
+  const set=d=>{V[sizeKey()]=Math.max(.8,Math.min(1.8,Math.round((size()+d)*10)/10));saveView();applySize();t.textContent=Math.round(size()*100)+'%'};
+  p.append(el('div',{className:'isz'},[btn('א−','הקטן את הטקסט',()=>set(-.1)),t,btn('א+','הגדל את הטקסט',()=>set(.1))]))}
+function applySize(){sec.style.setProperty('--is',size());grow()}
+
+/* ---------- fold / full screen ---------- */
+function setFold(f){V.fold=Object.assign({},V.fold);if(f)V.fold.insp=1;else delete V.fold.insp;if(f&&full)setFull(false);saveView();inspRender()}
+function setFull(f){full=f;sec.classList.toggle('full',f);document.body.classList.toggle('insp-full',f);
+  fullB.textContent=f?'⤡':'⤢';fullB.title=f?'חזרה לפתק':'מסך מלא';fullB.setAttribute('aria-label',fullB.title);
+  grow();if(f)setTimeout(()=>{body.scrollTop=body.scrollHeight},0);else sec.scrollIntoView({block:'start'})}
+
+/* ---------- text: escape, then **bold**, ### heading, - list, paragraphs ---------- */
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function md(s){return esc(s).split(/\n{2,}/).map(par=>'<p>'+par.split('\n').map(l=>{
+  l=l.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  if(/^#{1,4}\s/.test(l))return '<span class="h">'+l.replace(/^#+\s*/,'')+'</span>';
+  if(/^\s*[-*•]\s/.test(l))return '<span class="li">• '+l.replace(/^\s*[-*•]\s/,'')+'</span>';
+  if(/^\s*\d+[.)]\s/.test(l))return '<span class="li">'+l.trim()+'</span>';
+  return l}).join('<br>').replace(/<\/span><br>/g,'</span>')+'</p>').join('')}
+const host=u=>{try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return ''}};
+function bubble(m){
+  const b=el('div',{className:'b '+(m.r==='me'?'me':'om')});
+  if(m.r==='me')b.textContent=m.t;else b.innerHTML=md(m.t);
+  if(m.src&&m.src.length){const s=el('div',{className:'srcs'},[el('span',{textContent:'מקורות:'})]);
+    m.src.forEach(x=>s.append(el('a',{href:x.u,target:'_blank',rel:'noopener',textContent:x.t||host(x.u)||'קישור'})));b.append(s)}
+  return b}
+function rateBox(){
+  const w=el('div',{className:'rate'},[el('span',{textContent:'איך היה היום?'})]);
+  CH.forEach(([ch,name])=>{const row=el('div',{className:'ch'});
+    RATE.forEach(([v,t])=>{const x=btn(t,name+': '+t,()=>{D.ratings[ch]=v;cacheIt();inspRender();
+      google.script.run.withFailureHandler(()=>toast('הדירוג לא נשמר')).inspRate(ch,v,KEY)});
+      x.setAttribute('aria-pressed',String(D.ratings[ch]===v));row.append(x)});
+    w.append(el('div',{className:'rr'},[el('b',{textContent:name}),row]))});
+  return w}
+
+/* ---------- render ---------- */
+function inspRender(){
+  const folded=!!(V.fold||{}).insp&&!full;
+  sec.hidden=state==='off';sec.classList.toggle('folded',folded);
+  const q=document.getElementById('quote');if(q&&state!=='off')q.hidden=true;
+  fvT.textContent='☀ '+(D?D.verse:'השראה יומית');
+  const st=D?Math.min(4,D.stage||1):1;
+  ttl.textContent='☀ השראה · '+(st>=4?'פרקים 2–3':'פרק 1');
+  steps.innerHTML='';for(let k=1;k<=4;k++)steps.append(el('i',{className:(k<=st?'on':'')+(k===st?' now':'')}));
+  steps.title=`שלב ${st} מתוך 4: ${STAGE[st-1]}`;
+  body.innerHTML='';
+  if(!D){body.append(el('p',{className:'story',textContent:state==='err'?'Gemini עמוס כרגע. אנסה שוב בעוד כמה דקות.':'מכין את ההשראה של היום…'}))}
+  else{
+    if(D.src)body.append(el('span',{className:'src',textContent:D.src}));
+    body.append(el('p',{className:'verse',textContent:D.verse}));
+    if(D.story)body.append(el('p',{className:'story',textContent:D.story}));
+    if(D.question)body.append(el('p',{className:'ask',textContent:D.question}));
+    const chat=el('div',{className:'chat'});
+    D.chat.forEach(m=>{chat.append(bubble(m));if(m.fb)chat.append(rateBox())});
+    if(busy)chat.append(el('div',{className:'b om wait',textContent:'חושב…'}));
+    else if(failed){const f=el('div',{className:'b om fail',textContent:'לא הגיעה תשובה.'});f.append(btn('נסה שוב','נסה שוב',()=>sendIt(true)));chat.append(f)}
+    body.append(chat)}
+  box.hidden=!D;up.disabled=busy;
+  modelT.textContent=D&&D.model?'· '+D.model.replace(/^gemini-/,'Gemini '):'';
+  arch.hidden=!past.length;renderPast();applySize()}
+function renderPast(){
+  pastEl.hidden=!open.arch;archB.textContent='ימים קודמים '+(open.arch?'▴':'▾');if(!open.arch)return;
+  pastEl.innerHTML='';
+  past.forEach(p=>{const nm=new Intl.DateTimeFormat('he-IL',{weekday:'long',day:'numeric',month:'numeric'}).format(new Date(p.date+'T12:00'));
+    const b=el('button',{type:'button'},[el('span',{textContent:nm}),document.createTextNode(p.verse)]);
+    b.addEventListener('click',()=>{open[p.date]=!open[p.date];if(open[p.date]&&!open['d'+p.date])
+      google.script.run.withSuccessHandler(d=>{open['d'+p.date]=d;renderPast()}).inspDay(p.date,KEY);renderPast()});
+    pastEl.append(b);
+    if(open[p.date]){const o=el('div',{className:'old'}),d=open['d'+p.date];
+      if(!d)o.append(el('span',{className:'src',textContent:'טוען…'}));
+      else{o.append(el('span',{className:'src',textContent:d.src}),el('p',{className:'story',textContent:d.story}));d.chat.forEach(m=>o.append(bubble(m)))}
+      pastEl.append(o)}})}
+function grow(){ta.style.height='auto';ta.style.height=(ta.scrollHeight+2)+'px'}
+const cacheIt=()=>ls(IC,JSON.stringify({day:D,past}));
+
+/* ---------- server ---------- */
+function inspLoad(){
+  google.script.run.withSuccessHandler(r=>{
+    if(!r)return;past=r.past||past;
+    if(r.wait){state='load';setTimeout(inspLoad,15000)}
+    else if(r.day){if(!busy){D=r.day;state='ok'}}
+    else if(!D){state='err';setTimeout(inspLoad,5*60000)}
+    cacheIt();inspRender()})
+  .withFailureHandler(()=>{if(!D){state='off';document.getElementById('quote').hidden=!(S&&S.quote);inspRender()}}).inspGet(KEY)}
+function sendIt(retry){
+  if(busy||!D)return;const t=ta.value.trim();if(!retry&&!t){ta.focus();return}
+  if(rec)rec.stop();
+  if(!retry){D.chat.push({r:'me',t});ta.value='';ls(DRAFT,'');grow()}
+  busy=true;failed=false;inspRender();scrollEnd();
+  google.script.run.withSuccessHandler(r=>{busy=false;
+    if(r&&r.day)D=r.day;failed=!r||!!r.err;cacheIt();inspRender();scrollEnd()})
+  .withFailureHandler(()=>{busy=false;failed=true;inspRender()}).inspSend(retry?'':t,KEY)}
+function scrollEnd(){const last=body.querySelector('.chat>:last-child');if(!last)return;
+  if(full)body.scrollTop=body.scrollHeight;else last.scrollIntoView({block:'nearest',behavior:'smooth'})}
+
+/* ---------- typing and dictation ---------- */
+ta.addEventListener('input',()=>{grow();ls(DRAFT,ta.value)});
+ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();sendIt()}});
+function dictate(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(rec){rec.stop();return}
+  if(!SR){toast('אפשר להכתיב עם המיקרופון של המקלדת');ta.focus();return}
+  const base=ta.value.replace(/\s*$/,''),sep=base?' ':'';
+  rec=new SR();rec.lang='he-IL';rec.continuous=true;rec.interimResults=true;
+  rec.onresult=e=>{let s='';for(let k=0;k<e.results.length;k++)s+=e.results[k][0].transcript;ta.value=base+sep+s.trim();grow();ls(DRAFT,ta.value)};
+  rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){toast('המיקרופון חסום בדף הזה. אפשר להכתיב עם המיקרופון של המקלדת',6000);ta.focus()}};
+  rec.onend=()=>{rec=null;mic.classList.remove('on')};
+  try{rec.start();mic.classList.add('on')}catch(e){rec=null;toast('ההכתבה לא נפתחה. אפשר להכתיב עם המיקרופון של המקלדת')}}
+
+window.inspActive=()=>state!=='off';window.inspRender=inspRender;
+inspRender();inspLoad();
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!busy&&(!D||D.date!==today()))inspLoad()});
+})();
+</script>

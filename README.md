@@ -7,7 +7,7 @@ Office Manager (OM): Pablo's personal Telegram secretary.
 | `src/` | Google Apps Script project "Office Manager Cloud" (pushed with clasp) |
 | `worker/worker_relay.js` | Cloudflare Worker `om-relay` (Telegram webhook -> Apps Script) |
 | `laptop/` | Windows laptop side: `print_agent.py` (pulls the print queue), `pdfclean.py` |
-| `tests/board.test.js` | Phone-size checks of the board and family pages (Playwright, mocked server). Run `node tests/board.test.js` before a board PR |
+| `tests/board.test.js`, `tests/insp.test.js` | Phone-size checks of the board, family page and morning inspiration note (Playwright, mocked server). Run both before a board PR |
 
 Secrets live only in Apps Script **Script Properties**, Worker secrets and the laptop `.env`.
 Never commit them (see `.gitignore`).

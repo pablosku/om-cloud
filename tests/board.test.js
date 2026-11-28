@@ -23,7 +23,8 @@ const mock = (() => {
     quote: { s: 'יוגה היא שוויון נפש.', c: 'פרשנות', src: 'גיטה' }, view: { calPos: 2 }, today: d };
   function R() { let ok; const o = { withSuccessHandler(x) { ok = x; return o; }, withFailureHandler() { return o; },
     boardGet() { setTimeout(() => ok(JSON.parse(JSON.stringify(data))), 10); },
-    boardOp(op) { ops.push(op); setTimeout(() => ok(op.t === 'rem.add' ? { ok: op.text } : 'ok'), 10); } }; return o; }
+    boardOp(op) { ops.push(op); setTimeout(() => ok(op.t === 'rem.add' ? { ok: op.text } : 'ok'), 10); },
+    inspGet() {} }; return o; } // the inspiration note has its own test (insp.test.js)
   window.google = { script: { get run() { return R(); } } };
 }).toString();
 
